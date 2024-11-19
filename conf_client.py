@@ -135,19 +135,12 @@ class ConferenceClient:
         you can create different functions for sharing various kinds of data
         """
         # 启动任务并立即返回
-        asyncio.create_task(receive_audio(self))
-        asyncio.create_task(output_audio(self, fps_or_frequency))
-        # 上为初始化，负责接受和输出各类数据
-        # 下为控制数据发送
-        while self.is_working and self.on_meeting:
-            if self.acting_data_types['text']:
-                pass
-            if self.acting_data_types['audio']:
-                asyncio.create_task(send_audio(self))
-            if self.acting_data_types['video']:
-                pass
-            if self.acting_data_types['audio']:
-                pass
+        # receive_data,每种写一个
+        # output_data
+        # send_data
+        await asyncio.gather(receive_audio(self),
+                             output_data(self, fps_or_frequency),
+                             send_datas(self))
 
     def share_switch(self, data_type):
         """
