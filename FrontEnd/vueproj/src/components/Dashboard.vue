@@ -18,7 +18,7 @@
       <a-col span="8">
         <a-card title="加入会议" class="hover-card">
           <p>通过会议号加入会议。</p>
-          <a-button type="primary" block @click="joinMeeting" class="hover-button">加入会议</a-button>
+          <a-button type="primary" block @click="showJoinMeeting" class="hover-button">加入会议</a-button>
         </a-card>
       </a-col>
       <a-col span="8">
@@ -100,6 +100,71 @@
       </a-form>
     </a-modal>
 
+    <!-- 加入会议模态框 -->
+    <a-modal
+        v-model:visible="isJoinMeetingVisible"
+        title="加入会议"
+        :footer="null"
+        centered
+        @cancel="resetJoinForm"
+        ok-text="加入"
+        cancel-text="取消"
+    >
+      <a-form>
+        <!-- 会议号 -->
+        <a-form-item
+            label="会议号："
+            :label-col="{ span: 5 }"
+            :wrapper-col="{ span: 19 }"
+            :rules="[{ required: true, message: '请输入会议号!' }]"
+        >
+          <a-input v-model:value="joinMeetingId" placeholder="请输入会议号" />
+        </a-form-item>
+
+        <!-- 提交按钮 -->
+        <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
+          <a-button type="primary" block @click="checkMeetingPassword">
+            加入会议
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 输入密码模态框 -->
+    <a-modal
+        v-model:visible="isPasswordModalVisible"
+        title="输入会议密码"
+        :footer="null"
+        centered
+        @cancel="resetPasswordForm"
+        ok-text="确认"
+        cancel-text="取消"
+    >
+      <a-form>
+        <!-- 密码 -->
+        <a-form-item
+            label="密码："
+            :label-col="{ span: 5 }"
+            :wrapper-col="{ span: 19 }"
+            :rules="[{ required: true, message: '请输入会议密码!' }]"
+        >
+          <a-input
+              type="password"
+              maxlength="6"
+              placeholder="6位数字密码"
+              v-model:value="meetingPassword"
+          />
+        </a-form-item>
+
+        <!-- 提交按钮 -->
+        <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
+          <a-button type="primary" block @click="joinMeetingWithPassword">
+            确认
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 统计信息与日历 -->
     <div class="dashboard-extra">
       <a-card title="统计信息" class="hover-card">
@@ -119,6 +184,10 @@ export default {
   data() {
     return {
       isCreateMeetingVisible: false,
+      isJoinMeetingVisible: false,
+      isPasswordModalVisible: false,
+      joinMeetingId: "",
+      meetingPassword: "",
       meeting: {
         title: "",
         members: [],
@@ -133,9 +202,6 @@ export default {
     };
   },
   methods: {
-    joinMeeting() {
-      return message.success("参加会议");
-    },
     viewRecent() {
       console.log('查看最近会议');
     },
@@ -166,6 +232,7 @@ export default {
       console.log("创建会议数据：", this.meeting);
       message.success("会议创建成功！");
       this.resetForm();
+      this.joinMeeting();
     },
     handlePasswordSwitchChange(value) {
       if (!value) {
@@ -180,6 +247,47 @@ export default {
         password: "",
       };
       this.isCreateMeetingVisible = false;
+    },
+    showJoinMeeting() {
+      this.isJoinMeetingVisible = true;
+    },
+    checkMeetingPassword() {
+      if (!this.joinMeetingId) {
+        return message.error("请填写会议号！");
+      }
+
+      // 模拟后台检测会议是否有密码
+      const hasPassword = true; // 假设返回结果
+
+      if (hasPassword) {
+        this.isPasswordModalVisible = true;
+      } else {
+        this.joinMeeting();
+        this.resetJoinForm();
+      }
+    },
+    joinMeetingWithPassword() {
+      if (this.meetingPassword.length !== 6) {
+        return message.error("密码必须为6位数字！");
+      }
+
+      // 模拟加入会议
+      message.success("加入会议成功！");
+      this.resetPasswordForm();
+      this.resetJoinForm();
+    },
+    joinMeeting() {
+      // 模拟加入会议
+      message.success("加入会议成功！");
+      this.resetJoinForm();
+    },
+    resetJoinForm() {
+      this.joinMeetingId = "";
+      this.isJoinMeetingVisible = false;
+    },
+    resetPasswordForm() {
+      this.meetingPassword = "";
+      this.isPasswordModalVisible = false;
     },
   },
 };
@@ -214,10 +322,6 @@ export default {
   transition: background-color 0.3s ease, transform 0.2s ease;
   border-radius: 8px;
   font-size: 16px;
-}
-.hover-button:hover {
-  background: linear-gradient(90deg, #1e90ff, #00c9ff); /* 修正渐变背景 */
-  transform: translateY(-2px);
 }
 
 .dashboard-grid {
