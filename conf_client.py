@@ -1,75 +1,43 @@
 import asyncio
+import util
+from conf_opt import *
 from util import *
 from config import *
 
 
 class ConferenceClient:
-    def __init__(self, ):
+    def __init__(self, host='127.0.0.1'):
         # sync client
+        self.host = host
+        self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
+        self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio', 'text']}
+        self.acting_data_types['text'] = True
+        self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
+        # 初始化字典
+        self.sockets = {}
+        # you may need to save received streamd data from other clients in conference
+        self.data_queues = {data_type: asyncio.Queue() for data_type in ['screen', 'camera', 'audio', 'text']}
+
+        self.server_addr = (SERVER_IP, MAIN_SERVER_PORT)  # server addr
         self.conference_id = None
         self.is_working = True
-        self.server_addr = (SERVER_IP, MAIN_SERVER_PORT)  # server addr
         self.on_meeting = False  # status
-        self.conns = None  # you may need to maintain multiple conns for a single conference
-        self.support_data_types = ['screen', 'camera', 'audio']  # for some types of data
-        self.running_data_types = []
-        self.share_data = {}
-
         self.conference_info = None  # you may need to save and update some conference_info regularly
 
-        self.recv_data = {data_type: None for data_type in ['screen', 'camera', 'audio']}
-        # you may need to save received streamd data from other clients in conference
-
-        self.reader = None
-        self.writer = None
-
-    async def establish_connection(self):
-        """
-        Establish a persistent connection to the server.
-        """
-        if not self.reader or not self.writer:
-            self.reader, self.writer = await asyncio.open_connection(*self.server_addr)
-            print("[Info]: Connection established with the server.")
-
-    async def close_connection(self):
-        """
-        Close the persistent connection to the server.
-        """
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
-            print("[Info]: Connection closed with the server.")
-            self.reader = None
-            self.writer = None
-
-    async def send_request(self, request_data):
-        """
-        Send a request to the main server and receive the response.
-        """
-        if not self.reader or not self.writer:
-            print("[Error]: Connection not established. Please ensure the connection is active.")
-            return None
-        try:
-            self.writer.write(request_data.encode())
-            await self.writer.drain()
-            response = await self.reader.read(1024)
-            return response.decode()
-        except Exception as e:
-            print(f"[Error]: Failed to send request: {e}")
-            return None
-
-    async def create_conference(self):
+    def create_conference(self):
         """
         create a conference: send create-conference request to server and obtain necessary data to
         receive conference id.
         """
         print("[Info]: Creating a new conference...")
-        request_data = "Create Conference"
+        request_data = "COMMAND: Create Conference"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
+            self.start_conference()
             self.on_meeting = True
+            self.keep_share()
             print(f"[Success]: Conference created with ID {self.conference_id}")
         else:
             print(f"[Error]: Failed to create conference: {response}")
@@ -80,26 +48,29 @@ class ConferenceClient:
         """
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
-        request_data = f"JOIN {conference_id}"
+        request_data = f"COMMAND: JOIN {conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             self.conference_id = conference_id
+            self.start_conference()
             self.on_meeting = True
+            self.keep_share()
             print(f"[Success]: Joined conference {self.conference_id}")
         else:
             print(f"[Error]: Failed to join conference: {response}")
 
     def quit_conference(self):
         """
-        quit your on-going conference
+        quit your ongoing conference
         """
         if not self.on_meeting:
             print("[Warn]: Not currently in any meeting.")
             return
         print("[Info]: Quitting conference...")
-        request_data = f"QUIT ID {self.conference_id}"
+        request_data = f"COMMAND: QUIT ID {self.conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
+            self.close_conference()
             self.on_meeting = False
             self.conference_id = None
             print("[Success]: Successfully quit the conference.")
@@ -108,29 +79,75 @@ class ConferenceClient:
 
     def cancel_conference(self):
         """
-        cancel your on-going conference (when you are the conference manager): ask server to close all clients
+        cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
         print("[Info]: Cancelling conference...")
-        request_data = f"CANCEL id {self.conference_id}"
+        request_data = f"COMMAND: CANCEL id {self.conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             self.close_conference()
+            self.on_meeting = False
+            self.conference_id = None
             print("[Success]: Conference cancelled successfully.")
         else:
             print(f"[Error]: Failed to cancel conference: {response}")
 
-    async def keep_share(self, data_type, send_conn, capture_function, compress=None, fps_or_frequency=30):
+    def start_conference(self):
+        """
+            init conns when create or join a conference with necessary conference_info
+            and
+            start necessary running task for conference
+            """
+        establish_connect(self)
+        print("[Info]: Initializing conference...")
+
+    def close_conference(self):
+        """
+            close all conns to servers or other clients and cancel the running tasks
+            pay attention to the exception handling
+            """
+        print("[Info]: Closing conference...")
+        self.is_working = False
+        self.on_meeting = False
+        self.conference_id = None
+        # Close all active connections
+
+    async def send_request(self, request_data):
+        """
+        Send a request to the main server and receive the response.
+        """
+        if not self.sockets['text']:
+            print("[Error]: Connection not established. Please ensure the connection is active.")
+            return None
+        try:
+            reader, writer = self.sockets['text']
+            writer.write(request_data.encode())
+            await writer.drain()
+            response = await reader.read(1024)
+            return response.decode()
+        except Exception as e:
+            print(f"[Error]: Failed to send request: {e}")
+            return None
+
+    async def keep_share(self, compress=None, fps_or_frequency=30):
         """
         running task: keep sharing (capture and send) certain type of data from server or clients (P2P)
         you can create different functions for sharing various kinds of data
         """
+        # 启动任务并立即返回
+        asyncio.create_task(receive_audio(self))
+        asyncio.create_task(output_audio(self, fps_or_frequency))
+        # 上为初始化，负责接受和输出各类数据
+        # 下为控制数据发送
         while self.is_working and self.on_meeting:
-            data = capture_function()
-            if compress:
-                data = compress(data)
-            send_conn.write(data)
-            await send_conn.drain()
-            await asyncio.sleep(1 / fps_or_frequency)
+            if self.acting_data_types['text']:
+                pass
+            if self.acting_data_types['audio']:
+                asyncio.create_task(send_audio(self))
+            if self.acting_data_types['video']:
+                pass
+            if self.acting_data_types['audio']:
+                pass
 
     def share_switch(self, data_type):
         """
@@ -139,57 +156,14 @@ class ConferenceClient:
         if data_type not in self.support_data_types:
             print(f"[Warn]: Data type {data_type} is not supported.")
             return
-        if data_type not in self.running_data_types:
-            self.running_data_types.append(data_type)
+        if data_type not in self.acting_data_types:
+            self.acting_data_types[data_type] = True
             print(f"[Info]: Opening sharing for {data_type}...")
         else:
-            self.running_data_types.remove(data_type)
+            self.acting_data_types[data_type] = False
             print(f"[Info]: Closing sharing for {data_type}...")
 
         # Implementation for toggling data sharing
-
-    async def keep_recv(self, recv_conn, data_type, decompress=None):
-        """
-        running task: keep receiving certain type of data (save or output)
-        you can create other functions for receiving various kinds of data
-        """
-        while self.is_working and self.on_meeting:
-            data = await recv_conn.read(1024)
-            if decompress:
-                data = decompress(data)
-            # recv_data = Node,如何设计才能正确持续接受数据呢？
-            self.recv_data[data_type] = data
-            print(f"[Debug]: Received data for {data_type}")
-
-    def output_data(self):
-        """
-        running task: output received stream data
-        """
-        while self.is_working:
-            # Example for outputting received data (can be extended to handle all data types)
-            if self.recv_data['screen']:
-                screen_image = decompress_image(self.recv_data['screen'])
-                screen_image.show()
-
-    def start_conference(self):
-        """
-        init conns when create or join a conference with necessary conference_info
-        and
-        start necessary running task for conference
-        """
-        print("[Info]: Initializing conference...")
-        # Initialize connections and start necessary tasks
-
-    def close_conference(self):
-        """
-        close all conns to servers or other clients and cancel the running tasks
-        pay attention to the exception handling
-        """
-        print("[Info]: Closing conference...")
-        self.is_working = False
-        self.on_meeting = False
-        self.conference_id = None
-        # Close all active connections
 
     def start(self):
         """
@@ -201,7 +175,7 @@ class ConferenceClient:
         loop = asyncio.get_event_loop()
         try:
             # Establish the connection at the start of the application
-            loop.run_until_complete(self.establish_connection())
+            # loop.run_until_complete(self.establish_connect())
             # run_until_complete(coro) 是事件循环的一个方法，用于运行一个协程并阻塞程序，直到协程执行完成。
             # Command-line interface
             while True:
@@ -233,8 +207,7 @@ class ConferenceClient:
                             print('[Warn]: Input conference ID must be in digital form')
                     elif fields[0] == 'switch':
                         data_type = fields[1]
-                        if data_type in self.share_data.keys():
-                            self.share_switch(data_type)
+                        self.share_switch(data_type)
                     else:
                         recognized = False
                 else:
@@ -242,9 +215,9 @@ class ConferenceClient:
 
                 if not recognized:
                     print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
-        finally:
-            # Close the connection when the application ends
-            loop.run_until_complete(self.close_connection())
+        except Exception as e:
+            print("[Warn]: Exception occurred:\n", e)
+        # Close the connection when the application ends
 
 
 if __name__ == '__main__':
