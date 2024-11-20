@@ -10,7 +10,7 @@ import pyautogui
 import numpy as np
 from PIL import Image, ImageGrab
 from config import *
-import asyncio
+
 
 # audio setting
 FORMAT = pyaudio.paInt16
@@ -120,6 +120,10 @@ def capture_camera():
     if not ret:
         raise Exception('Fail to capture frame from camera')
     return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+
+
+def capture_voice():
+    return streamin.read(CHUNK)
 
 
 def compress_image(image, format='JPEG', quality=85):
