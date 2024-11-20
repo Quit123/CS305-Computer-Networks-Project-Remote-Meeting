@@ -1,11 +1,13 @@
 import asyncio
 from conf_client import *
+from util import *
 
 
 async def establish_connect(self):
     try:
         for type in self.support_data_types:
-            reader, writer = await asyncio.open_connection(self.server_addr[0], self.server_addr[1])
+            port = self.ports.get(type)
+            reader, writer = await asyncio.open_connection(self.server_addr[0], port)
             self.sockets[type] = (reader, writer)
         print(f"[Info]: Connected to '{self.server_addr}' server.")
     except Exception as e:
@@ -35,6 +37,14 @@ async def receive_audio(self, decompress=None):
         self.data_queues['audio'].put_nowait(audio_chunk)
 
 
+async def receive_text(self, decompress=None):
+    print("[Info]: Starting text playback monitoring...")
+    reader, writer = self.sockets['text']
+    while self.on_meeting:
+        text_chunk = await reader.read(CHUNK)
+        self.data_queues['text'].put_nowait(text_chunk)
+
+
 async def output_data(self, fps_or_frequency):
     """
         running task: output received stream data
@@ -53,30 +63,55 @@ async def output_data(self, fps_or_frequency):
         if not self.data_queues['audio'].empty():
             pass
         if not self.data_queues['text'].empty():
-            pass
+            received_message = self.text_queue.get()
+            try:
+                with open('user_commands.txt', 'a', encoding='utf-8') as f:
+                    f.write(received_message)
+            except Exception as e:
+                print(f"upload entry error: {e}")
 
         await asyncio.sleep(1 / fps_or_frequency)
 
 
 async def send_datas(self):
+    await asyncio.gather(send_texts(self), send_audio(self))
+
+    # if self.acting_data_types['video']:
+    #     pass
+    # if self.acting_data_types['audio']:
+    #     pass
+    await asyncio.sleep(0)
+
+
+async def send_texts(self):
     while self.is_working and self.on_meeting:
-        if self.acting_data_types['text']:
-            pass
-        if self.acting_data_types['audio']:
-            print("[Info]: Starting audio transmission...")
-            if not streamin.is_active():
-                streamin.start_stream()
-            reader, writer = self.sockets['audio']
-            while (self.is_working and self.on_meeting) or not self.acting_data_types['audio']:
-                audio_chunk = streamin.read(CHUNK)
-                if not audio_chunk:
-                    break
-                writer.write(audio_chunk)
+        print("[Info]: Starting text transmission...")
+        reader, writer = self.sockets['text']
+        while self.is_working and self.on_meeting:
+            # 等待事件触发
+            await self.text_event.wait()
+            # 事件触发后处理数据
+            if self.text:
+                print(f"[Info]: Sending: {self.text}")
+                writer.write(self.text.encode())
                 await writer.drain()
-            streamin.stop_stream()
-            print("[Info]: Audio is closing.")
-        if self.acting_data_types['video']:
-            pass
-        if self.acting_data_types['audio']:
-            pass
-        await asyncio.sleep(0)
+                self.text_event.clear()  # 重置事件
+
+
+async def send_audio(self):
+    while self.is_working and self.on_meeting:
+        if not self.acting_data_types['audio']:
+            await asyncio.sleep(0)
+            continue
+        print("[Info]: Starting audio transmission...")
+        if not streamin.is_active():
+            streamin.start_stream()
+        reader, writer = self.sockets['audio']
+        while self.is_working and self.on_meeting and self.acting_data_types['audio']:
+            audio_chunk = streamin.read(CHUNK)
+            if not audio_chunk:
+                break
+            writer.write(audio_chunk)
+            await writer.drain()
+        streamin.stop_stream()
+        print("[Info]: Audio is closing.")

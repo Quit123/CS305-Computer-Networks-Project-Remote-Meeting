@@ -3,6 +3,10 @@ import util
 from conf_opt import *
 from util import *
 from config import *
+from flask import Flask, request, jsonify
+import asyncio
+
+app = Flask(__name__)
 
 
 class ConferenceClient:
@@ -10,14 +14,15 @@ class ConferenceClient:
         # sync client
         self.host = host
         self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
-        self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio', 'text']}
-        self.acting_data_types['text'] = True
+        self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
+        # self.acting_data_types['text'] = True  这里使用前端控制，delete
         self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
         # 初始化字典
         self.sockets = {}
         # you may need to save received streamd data from other clients in conference
         self.data_queues = {data_type: asyncio.Queue() for data_type in ['screen', 'camera', 'audio', 'text']}
-
+        self.text = None
+        self.text_event = asyncio.Event()  # 用于通知 send_texts 有新数据
         self.server_addr = (SERVER_IP, MAIN_SERVER_PORT)  # server addr
         self.conference_id = None
         self.is_working = True
@@ -138,7 +143,8 @@ class ConferenceClient:
         # receive_data,每种写一个
         # output_data
         # send_data
-        await asyncio.gather(receive_audio(self),
+        await asyncio.gather(receive_text(self),
+                             receive_audio(self),
                              output_data(self, fps_or_frequency),
                              send_datas(self))
 
@@ -162,15 +168,7 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
-        # 获取当前运行的事件循环（Event Loop）
-        # 事件循环是异步编程的核心，它协调并调度所有的异步任务和操作。
-        # 如果当前线程没有运行中的事件循环，它会创建一个新的事件循环并返回。
-        loop = asyncio.get_event_loop()
         try:
-            # Establish the connection at the start of the application
-            # loop.run_until_complete(self.establish_connect())
-            # run_until_complete(coro) 是事件循环的一个方法，用于运行一个协程并阻塞程序，直到协程执行完成。
-            # Command-line interface
             while True:
                 if not self.on_meeting:
                     status = 'Free'
