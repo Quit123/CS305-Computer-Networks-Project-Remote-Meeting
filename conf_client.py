@@ -15,18 +15,24 @@ class ConferenceClient:
         self.host = host
         self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
-        # self.acting_data_types['text'] = True  这里使用前端控制，delete
+        self.acting_data_types['text'] = True  # 这里使用前端控制，delete
         self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
         # 初始化字典
         self.sockets = {}
         # you may need to save received streamd data from other clients in conference
-        self.data_queues = {data_type: asyncio.Queue() for data_type in ['screen', 'camera', 'audio', 'text']}
+        self.data_queues = {
+            'screen': asyncio.Queue(),
+            'camera': asyncio.Queue(),
+            'audio': {},  # 将 'audio' 初始化为空字典
+            'text': asyncio.Queue()
+        }
         self.text = None
         self.text_event = asyncio.Event()  # 用于通知 send_texts 有新数据
         self.server_addr = (SERVER_IP, MAIN_SERVER_PORT)  # server addr
         self.conference_id = None
         self.is_working = True
         self.on_meeting = False  # status
+        self.can_share_screen = True
         self.conference_info = None  # you may need to save and update some conference_info regularly
 
     def create_conference(self):
@@ -35,7 +41,7 @@ class ConferenceClient:
         receive conference id.
         """
         print("[Info]: Creating a new conference...")
-        request_data = "COMMAND: Create Conference"
+        request_data = "[COMMAND]: Create Conference"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             # 回复格式 SUCCESS 123456
@@ -53,7 +59,7 @@ class ConferenceClient:
         """
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
-        request_data = f"COMMAND: JOIN {conference_id}"
+        request_data = f"[COMMAND]: JOIN {conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             self.conference_id = conference_id
@@ -72,7 +78,7 @@ class ConferenceClient:
             print("[Warn]: Not currently in any meeting.")
             return
         print("[Info]: Quitting conference...")
-        request_data = f"COMMAND: QUIT ID {self.conference_id}"
+        request_data = f"[COMMAND]: QUIT ID {self.conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             self.close_conference()
@@ -87,7 +93,7 @@ class ConferenceClient:
         cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
         print("[Info]: Cancelling conference...")
-        request_data = f"COMMAND: CANCEL id {self.conference_id}"
+        request_data = f"[COMMAND]: CANCEL id {self.conference_id}"
         response = asyncio.run(self.send_request(request_data))
         if response.startswith("SUCCESS"):
             self.close_conference()
@@ -121,9 +127,6 @@ class ConferenceClient:
         """
         Send a request to the main server and receive the response.
         """
-        if not self.sockets['text']:
-            print("[Error]: Connection not established. Please ensure the connection is active.")
-            return None
         try:
             reader, writer = self.sockets['text']
             writer.write(request_data.encode())
@@ -146,7 +149,8 @@ class ConferenceClient:
         await asyncio.gather(receive_text(self),
                              receive_audio(self),
                              output_data(self, fps_or_frequency),
-                             send_datas(self))
+                             send_datas(self),
+                             ask_new_clients_and_share_screen(self))
 
     def share_switch(self, data_type):
         """

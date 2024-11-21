@@ -27,11 +27,14 @@ if cap.isOpened():
 else:
     can_capture_camera = False
 
-my_screen_size = pyautogui.size()
+current_screen_size = {'width': 0, 'height': 0}
+# my_screen_size = pyautogui.size()
+
+screen_image = Image.new('RGB', (current_screen_size['width'], current_screen_size['height']), color=(0, 0, 0))
 
 
 def resize_image_to_fit_screen(image, my_screen_size):
-    screen_width, screen_height = my_screen_size
+    screen_width, screen_height = my_screen_size['width'], my_screen_size['height']
 
     original_width, original_height = image.size
 
@@ -61,14 +64,14 @@ def overlay_camera_images(screen_image, camera_images):
         print('[Warn]: cannot display when screen and camera are both None')
         return None
     if screen_image is not None:
-        screen_image = resize_image_to_fit_screen(screen_image, my_screen_size)
+        screen_image = resize_image_to_fit_screen(screen_image, current_screen_size)
 
     if camera_images is not None:
         # make sure same camera images
         if not all(img.size == camera_images[0].size for img in camera_images):
             raise ValueError("All camera images must have the same size")
 
-        screen_width, screen_height = my_screen_size if screen_image is None else screen_image.size
+        screen_width, screen_height = (current_screen_size['width'], current_screen_size['height']) if screen_image is None else screen_image.size
         camera_width, camera_height = camera_images[0].size
 
         # calculate num_cameras_per_row
@@ -85,7 +88,7 @@ def overlay_camera_images(screen_image, camera_images):
 
         # if no screen_img, create a container
         if screen_image is None:
-            display_image = Image.fromarray(np.zeros((camera_width, my_screen_size[1], 3), dtype=np.uint8))
+            display_image = Image.fromarray(np.zeros((camera_width, current_screen_size['height'], 3), dtype=np.uint8))
         else:
             display_image = screen_image
         # cover screen_img using camera_images
@@ -122,8 +125,8 @@ def capture_camera():
     return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 
-def capture_voice():
-    return streamin.read(CHUNK)
+# def capture_voice():
+#     return streamin.read(CHUNK)
 
 
 def compress_image(image, format='JPEG', quality=85):

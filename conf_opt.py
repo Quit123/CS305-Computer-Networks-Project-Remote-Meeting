@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 from conf_client import *
 from util import *
 
@@ -45,6 +46,13 @@ async def receive_text(self, decompress=None):
         self.data_queues['text'].put_nowait(text_chunk)
 
 
+async def receive_camera(self, decompress=None):
+    print("[Info]: Starting camera playback monitoring...")
+    reader, writer = self.sockets['camera']
+    while self.on_meeting:
+        camera_chunk = await reader.read(CHUNK)
+
+
 async def output_data(self, fps_or_frequency):
     """
         running task: output received stream data
@@ -58,10 +66,18 @@ async def output_data(self, fps_or_frequency):
         else:
             streamout.stop_stream()
         if not self.data_queues['screen'].empty():
-            screen_image = decompress_image(self.data_queues['screen'].get())
-            screen_image.show()
-        if not self.data_queues['audio'].empty():
-            pass
+            util.screen_image = decompress_image(self.data_queues['screen'].get())
+            util.screen_image.show()
+        if not self.data_queues['camera'].empty():
+            for user_camera in self.data_queues['camera']:
+                # 获取摄像头图像并解压
+                camera_image_bytes = user_camera.get()
+                camera_image = decompress_image(camera_image_bytes)
+                if 'screen_image' in locals():
+                    overlay_image = overlay_camera_images(util.screen_image, [camera_image])
+                    overlay_image.show()
+                else:
+                    print("[Warn]: No screen image available to overlay camera image.")
         if not self.data_queues['text'].empty():
             received_message = self.text_queue.get()
             try:
@@ -74,7 +90,7 @@ async def output_data(self, fps_or_frequency):
 
 
 async def send_datas(self):
-    await asyncio.gather(send_texts(self), send_audio(self))
+    await asyncio.gather(send_texts(self), send_audio(self), send_camera(self))
 
     # if self.acting_data_types['video']:
     #     pass
@@ -103,7 +119,6 @@ async def send_audio(self):
         if not self.acting_data_types['audio']:
             await asyncio.sleep(0)
             continue
-        print("[Info]: Starting audio transmission...")
         if not streamin.is_active():
             streamin.start_stream()
         reader, writer = self.sockets['audio']
@@ -114,4 +129,45 @@ async def send_audio(self):
             writer.write(audio_chunk)
             await writer.drain()
         streamin.stop_stream()
-        print("[Info]: Audio is closing.")
+
+
+async def send_camera(self):
+    """Capture, compress, and send camera image to the server."""
+    reader, writer = self.sockets['camera']
+    while self.is_working and self.on_meeting:
+        if not self.acting_data_types['camera']:
+            await asyncio.sleep(0)
+            continue
+        try:
+            # Capture image from the camera
+            camera_image = await capture_camera()
+            # Compress the image
+            compressed_image = await compress_image(camera_image)
+            # Send image to the server
+            writer.write(compressed_image)
+            await writer.drain()  # Ensure the data is sent asynchronously
+        except Exception as e:
+            print(f"Error sending camera image: {e}")
+        await asyncio.sleep(0)
+
+
+async def ask_new_clients_and_share_screen(self):
+    """向服务器询问是否有新客户端加入会议"""
+    try:
+        while self.is_working and self.on_meeting:
+            await asyncio.sleep(1)
+            inquire = "[ASK]: New client connect ?\n[ASK]: Can I sharing ?"
+            check = self.send_request(inquire)
+            if "No" in check:
+                print("[Info]: No new clients.")
+            else:
+                name = check.split(":")[1].strip().split()[1]
+                if name not in self.data_queues['audio']:
+                    self.data_queues['audio'][name] = asyncio.Queue()
+                    print("[Info]: New clients have joined the meeting.")
+            if "True" in check:
+                self.can_share_screen = True
+            else:
+                self.can_share_screen = False
+    except Exception as e:
+        print(f"[Error]: Error while querying server for new clients - {e}")
