@@ -50,47 +50,6 @@
           <a-input v-model:value="meeting.title" placeholder="请输入会议主题" />
         </a-form-item>
 
-        <!-- 邀请成员 -->
-        <a-form-item
-            label="邀请成员："
-            :label-col="{ span: 5 }"
-            :wrapper-col="{ span: 19 }"
-        >
-          <a-select
-              mode="tags"
-              placeholder="输入邮箱并回车添加"
-              v-model:value="meeting.members"
-              :token-separators="[',']"
-          />
-        </a-form-item>
-
-       <!-- 启用密码 -->
-       <a-form-item
-           label="启用密码："
-           :label-col="{ span: 5 }"
-           :wrapper-col="{ span: 19 }"
-       >
-         <a-switch
-             v-model:checked="meeting.enablePassword"
-             @change="handlePasswordSwitchChange"
-         />
-       </a-form-item>
-
-       <!-- 密码设置 -->
-       <a-form-item
-           v-if="meeting.enablePassword"
-           label="设置密码："
-           :label-col="{ span: 5 }"
-           :wrapper-col="{ span: 19 }"
-       >
-         <a-input
-             type="password"
-             maxlength="6"
-             placeholder="6位数字密码"
-             v-model:value="meeting.password"
-         />
-       </a-form-item>
-
 <!--        &lt;!&ndash; 提交按钮 &ndash;&gt;-->
         <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
           <a-button type="primary" block @click="createMeeting">
@@ -123,56 +82,13 @@
 
         <!-- 提交按钮 -->
         <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
-          <a-button type="primary" block @click="checkMeetingPassword">
+          <a-button type="primary" block @click="joinMeeting">
             加入会议
           </a-button>
         </a-form-item>
       </a-form>
     </a-modal>
 
-    <!-- 输入密码模态框 -->
-    <a-modal
-        v-model:visible="isPasswordModalVisible"
-        title="输入会议密码"
-        :footer="null"
-        centered
-        @cancel="resetPasswordForm"
-        ok-text="确认"
-        cancel-text="取消"
-    >
-      <a-form>
-        <!-- 密码 -->
-        <a-form-item
-            label="密码："
-            :label-col="{ span: 5 }"
-            :wrapper-col="{ span: 19 }"
-            :rules="[{ required: true, message: '请输入会议密码!' }]"
-        >
-          <a-input
-              type="password"
-              maxlength="6"
-              placeholder="6位数字密码"
-              v-model:value="meetingPassword"
-          />
-        </a-form-item>
-
-        <!-- 提交按钮 -->
-        <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
-          <a-button type="primary" block @click="joinMeetingWithPassword">
-            确认
-          </a-button>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <!-- 统计信息与日历 -->
-    <div class="dashboard-extra">
-      <a-card title="统计信息" class="hover-card">
-        <p>本月创建会议: 10</p>
-        <p>本月加入会议: 15</p>
-      </a-card>
-      <a-calendar class="dashboard-calendar" />
-    </div>
   </div>
 </template>
 
@@ -185,14 +101,9 @@ export default {
     return {
       isCreateMeetingVisible: false,
       isJoinMeetingVisible: false,
-      isPasswordModalVisible: false,
       joinMeetingId: "",
-      meetingPassword: "",
       meeting: {
         title: "",
-        members: [],
-        enablePassword: false,
-        password: "",
       },
       user: {
         name: '张三',
@@ -224,70 +135,30 @@ export default {
         console.log(this.meeting.title)
         return message.error("请填写会议主题！");
       }
-      if (this.meeting.enablePassword && this.meeting.password.length !== 6) {
-        console.log(this.meeting.password)
-        return message.error("密码必须为6位数字！");
-      }
 
       console.log("创建会议数据：", this.meeting);
       message.success("会议创建成功！");
       this.resetForm();
       this.joinMeeting();
     },
-    handlePasswordSwitchChange(value) {
-      if (!value) {
-        this.meeting.password = ""; // 禁用密码时清空密码
-      }
-    },
     resetForm() {
       this.meeting = {
         title: "",
-        members: [],
-        enablePassword: false,
-        password: "",
       };
       this.isCreateMeetingVisible = false;
     },
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
-    checkMeetingPassword() {
-      if (!this.joinMeetingId) {
-        return message.error("请填写会议号！");
-      }
-
-      // 模拟后台检测会议是否有密码
-      const hasPassword = true; // 假设返回结果
-
-      if (hasPassword) {
-        this.isPasswordModalVisible = true;
-      } else {
-        this.joinMeeting();
-        this.resetJoinForm();
-      }
-    },
-    joinMeetingWithPassword() {
-      if (this.meetingPassword.length !== 6) {
-        return message.error("密码必须为6位数字！");
-      }
-
-      // 模拟加入会议
-      message.success("加入会议成功！");
-      this.resetPasswordForm();
-      this.resetJoinForm();
-    },
     joinMeeting() {
       // 模拟加入会议
       message.success("加入会议成功！");
       this.resetJoinForm();
+      this.$router.push('/meeting' );
     },
     resetJoinForm() {
       this.joinMeetingId = "";
       this.isJoinMeetingVisible = false;
-    },
-    resetPasswordForm() {
-      this.meetingPassword = "";
-      this.isPasswordModalVisible = false;
     },
   },
 };

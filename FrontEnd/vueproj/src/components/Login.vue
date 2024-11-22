@@ -51,6 +51,8 @@
 </template>
 
 <script>
+import axios from "axios";
+
 export default {
   data() {
     return {
@@ -59,9 +61,18 @@ export default {
     };
   },
   methods: {
-    handleLogin() {
-      console.log('登录:', this.username, this.password);
-      this.$router.push('/dashboard');
+    async handleLogin() {
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/login' ,{
+          username: this.username,
+          password: this.password,
+        });
+        console.log('登录成功:', response.data);
+        this.$router.push('/dashboard');
+      } catch (error) {
+        console.error('登录失败:', error);
+        alert('登录失败，请检查您的用户名和密码。');
+      }
     },
     handleRegister() {
       console.log('注册:', this.username, this.password);
