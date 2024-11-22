@@ -1,21 +1,28 @@
 from flask import Flask, request, jsonify
 import asyncio
-from conf_client import *
-from util import *
+import util
 
-client_instance = ConferenceClient()
+app = Flask(__name__)
+client_instance = app.config.get('CLIENT_INSTANCE')
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    """前端通过 POST 请求更新 text 状态"""
+    # client_instance.share_switch('audio')
+    # return jsonify({'status': 'success', 'audio_status': client_instance.acting_data_types['audio']})
 
 
 @app.route('/update-audio-status', methods=['POST'])
-def update_text_status():
+def update_audio_status():
     """前端通过 POST 请求更新 text 状态"""
     client_instance.share_switch('audio')
     return jsonify({'status': 'success', 'audio_status': client_instance.acting_data_types['audio']})
 
 
 @app.route('/update-camera-status', methods=['POST'])
-def update_text_status():
-    """前端通过 POST 请求更新 text 状态"""
+def update_camera_status():
+    """前端通过 POST 请求更新 camera 状态"""
     client_instance.share_switch('camera')
     return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['camera']})
 
@@ -37,7 +44,7 @@ def update_screen_size():
     # global current_box_size
     data = request.json
     if 'width' in data and 'height' in data:
-        util.current_box_size = data
+        util.current_screen_size = data
         print(f"接收到边界框大小：宽: {data['width']}，高: {data['height']}")
-        return jsonify({'status': 'success', 'box_size': current_screen_size})
+        return jsonify({'status': 'success', 'box_size': util.current_screen_size})
     return jsonify({'status': 'error', 'message': '无效的数据'}), 400

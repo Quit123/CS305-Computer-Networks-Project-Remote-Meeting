@@ -10,7 +10,7 @@ import pyautogui
 import numpy as np
 from PIL import Image, ImageGrab
 from config import *
-
+from aiortc import VideoStreamTrack, RTCPeerConnection
 
 # audio setting
 FORMAT = pyaudio.paInt16
@@ -27,10 +27,34 @@ if cap.isOpened():
 else:
     can_capture_camera = False
 
+
 current_screen_size = {'width': 0, 'height': 0}
 # my_screen_size = pyautogui.size()
 
 screen_image = Image.new('RGB', (current_screen_size['width'], current_screen_size['height']), color=(0, 0, 0))
+
+
+def add_user_name_to_sdp(offer_sdp, user_name):
+    # 修改原始 SDP 来添加用户名信息（示例：在 origin 字段后附加用户名）
+    modified_sdp = offer_sdp + f"\n# User Name: {user_name}"
+    return modified_sdp
+
+
+def parse_client_id_from_offer(offer_sdp):
+    # 查找包含用户名的行
+    user_name_line = None
+    for line in offer_sdp.splitlines():
+        if line.startswith("# User Name:"):
+            user_name_line = line
+            break
+    if user_name_line:
+        # 提取用户名
+        user_name = user_name_line[len("# User Name: "):].strip()
+        # 移除用户名行，恢复原始的 SDP 内容
+        original_sdp = "\n".join(line for line in offer_sdp.splitlines() if not line.startswith("# User Name:"))
+        return user_name, original_sdp
+    else:
+        return None, offer_sdp  # 如果没有找到用户名，返回原始的 SDP
 
 
 def resize_image_to_fit_screen(image, my_screen_size):
@@ -71,7 +95,8 @@ def overlay_camera_images(screen_image, camera_images):
         if not all(img.size == camera_images[0].size for img in camera_images):
             raise ValueError("All camera images must have the same size")
 
-        screen_width, screen_height = (current_screen_size['width'], current_screen_size['height']) if screen_image is None else screen_image.size
+        screen_width, screen_height = (
+            current_screen_size['width'], current_screen_size['height']) if screen_image is None else screen_image.size
         camera_width, camera_height = camera_images[0].size
 
         # calculate num_cameras_per_row
@@ -117,32 +142,10 @@ def capture_screen():
 #     if not ret:
 #         raise Exception('Fail to capture frame from camera')
 #     return Image.fromarray(frame)
-def capture_camera():
-    """Capture the camera feed."""
-    ret, frame = cap.read()
-    if not ret:
-        raise Exception('Fail to capture frame from camera')
-    return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 
 # def capture_voice():
 #     return streamin.read(CHUNK)
-
-
-def compress_image(image, format='JPEG', quality=85):
-    """
-    compress image and output Bytes
-
-    :param image: PIL.Image, input image
-    :param format: str, output format ('JPEG', 'PNG', 'WEBP', ...)
-    :param quality: int, compress quality (0-100), 85 default
-    :return: bytes, compressed image data
-    """
-    img_byte_arr = BytesIO()
-    image.save(img_byte_arr, format=format, quality=quality)
-    img_byte_arr = img_byte_arr.getvalue()
-
-    return img_byte_arr
 
 
 def decompress_image(image_bytes):
