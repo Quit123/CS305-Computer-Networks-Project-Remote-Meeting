@@ -2,8 +2,10 @@ import asyncio
 from util import *
 import uuid
 from asyncio import StreamReader, StreamWriter
+from log_register_func import *
 
-
+users = load_users(user_inf_txt)
+print(users)
 class ConferenceServer:
     def __init__(self, conference_id):
         # async server
@@ -174,20 +176,52 @@ class MainServer:
         """
         running task: handle out-meeting (or also in-meeting) requests from clients
         """
-        while self.running:
-            data = await reader.read(1000)
-            message = data.decode()
-            opera=message.split('[COMMAND]:')[1]
-            if opera.startswith('Create'):
-                await self.handle_creat_conference(reader, writer)
-            elif opera.startswith('Join'):
-                conference_id = message.split()[1]
-                await self.handle_join_conference(reader, writer, conference_id, message)
-            elif opera.startswith('Quit'):
-                await self.handle_quit_conference(reader, writer, message)
-            elif opera.startswith('Cancel'):
-                conference_id = opera.split()[1]
-                await self.handle_cancel_conference(reader, writer, conference_id, message)
+
+        with open("command.txt", "a") as f:
+            while self.running:
+                client_address = writer.get_extra_info('peername')
+                receive_data = await reader.read(1024)
+                message = receive_data.decode()
+                if not message:
+                    break
+                f.write(f'{client_address}' + receive_data + '\n')
+                print(f'{client_address}{receive_data}')
+                if message.startswith('[COMMAND]:'):
+                    opera = message.split('[COMMAND]:')[1]
+                    if opera.startswith('Create'):
+                        await self.handle_creat_conference(reader, writer)
+                    elif opera.startswith('Join'):
+                        conference_id = message.split()[1]
+                        await self.handle_join_conference(reader, writer, conference_id, message)
+                    elif opera.startswith('Quit'):
+                        await self.handle_quit_conference(reader, writer, message)
+                    elif opera.startswith('Cancel'):
+                        conference_id = opera.split()[1]
+                        await self.handle_cancel_conference(reader, writer, conference_id, message)
+                else:
+                    cmd = message.split(' ')
+                    if cmd[0] == 'login':
+                        if len(cmd) < 3:
+                            feedback_data = 'Please re-enter the login commend with your username and password'
+                            feedback_data = FAILURE(feedback_data)
+                        elif len(cmd) == 3:
+                            feedback_data, login_user = login_authentication(writer, reader, cmd, users)
+                        else:
+                            feedback_data = "Password shouldn't include spaces"
+                            feedback_data = FAILURE(feedback_data)
+                    elif cmd[0] == 'register':
+                        if len(cmd) < 3:
+                            feedback_data = 'Please re-enter the command with username and password'
+                            feedback_data = FAILURE(feedback_data)
+                        elif len(cmd) > 3:
+                            feedback_data = "Username or password shouldn't include spaces"
+                            feedback_data = FAILURE(feedback_data)
+                        else:
+                            feedback_data = user_register(cmd, users)
+                    writer.write(feedback_data.encode())
+                    if feedback_data == '200:disconnected':
+                        print(f'Client {client_address} disconnected')
+                        writer.close()
 
     async def start(self):
         """
@@ -195,6 +229,7 @@ class MainServer:
         """
         server = await asyncio.start_server(self.request_handler, self.server_ip, self.server_port)
         print(f'Serving on {self.server_ip}:{self.server_port}')
+
         await server.serve_forever()
 
     async def stop(self):
