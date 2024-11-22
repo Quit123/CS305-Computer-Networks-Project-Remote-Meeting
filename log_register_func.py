@@ -6,6 +6,8 @@ import re
 import random
 import ast
 import fileinput
+import conf_client
+
 user_inf_txt = 'users.txt'
 login_commands = [
     '?',
@@ -188,14 +190,24 @@ def server_message_encrypt(message):
     cmd = message.split()
     if cmd[0] in ['login', 'register']:
         if len(cmd) < 3:
-            return message, None
+            conf_client.established_client.send(message.encode("utf-8"))
+            recv_data = server_response(conf_client.established_client, None).decode("utf-8")
+            return recv_data
         else:
-            return encrypt(3, cmd)
+            encrypted_message, encrypted_password = encrypt(3, cmd)
+            conf_client.established_client.send(encrypted_message.encode("utf-8"))
+            recv_data = server_response(conf_client.established_client, encrypted_password).decode("utf-8")
+            return recv_data
     elif cmd[0] == 'changepwd':
         if len(cmd) < 2:
-            return message, None
+            conf_client.established_client.send(message.encode("utf-8"))
+            recv_data = server_response(conf_client.established_client, None).decode("utf-8")
+            return recv_data
         else:
-            return encrypt(2, cmd)
+            encrypted_message, encrypted_password = encrypt(2, cmd)
+            conf_client.established_client.send(encrypted_message.encode("utf-8"))
+            recv_data = server_response(conf_client.established_client, encrypted_password).decode("utf-8")
+            return recv_data
     else:
         return message, None
 

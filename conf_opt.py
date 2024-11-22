@@ -1,5 +1,7 @@
 import asyncio
 import aiohttp
+import base64
+import requests
 import json
 import socket
 from util import *
@@ -35,6 +37,22 @@ async def close_connection(self):
     print("[Info]: Connection closed with the server.")
 
 
+async def send_camera_frame_to_frontend(camera_images):
+    """
+    Send camera frame to the frontend via API
+    """
+    try:
+        url = 'http://localhost:5000/api/receive_camera_frame'
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=camera_images) as response:
+                if response.status == 200:
+                    print("Frame successfully sent to frontend.")
+                else:
+                    print(f"Error: {response.status}")
+    except Exception as e:
+        print(f"Failed to send camera frame to frontend: {e}")
+
+
 async def output_data(self, fps_or_frequency):
     """
         running task: output received stream data
@@ -52,15 +70,17 @@ async def output_data(self, fps_or_frequency):
             screen_image = decompress_image(self.data_queues['screen'].get())
             screen_image.show()
         if not self.data_queues['camera'].empty():
-            for user_camera in self.data_queues['camera']:
-                # 获取摄像头图像并解压
-                camera_image_bytes = user_camera.get()
-                camera_image = decompress_image(camera_image_bytes)
-                if 'screen_image' in locals():
-                    overlay_image = overlay_camera_images(screen_image, [camera_image])
-                    overlay_image.show()
-                else:
-                    print("[Warn]: No screen image available to overlay camera image.")
+            all_user_camera_data = []
+            for username, user_camera_queue in self.data_queues['camera'].items():
+                if not user_camera_queue.empty():
+                    # 获取摄像头图像并解压
+                    camera_image_bytes = user_camera_queue.get()
+                    camera_image = decompress_image(camera_image_bytes)
+                    all_user_camera_data.append({
+                        'username': username,
+                        'camera_image': base64.b64encode(camera_image).decode('utf-8')
+                    })
+            await send_camera_frame_to_frontend(all_user_camera_data)
         if not self.data_queues['text'].empty():
             received_message = self.text_queue.get()
             try:
@@ -161,7 +181,6 @@ async def receive_audio(self, decompress=None):
 
 async def send_camera(self):
     """Capture, compress, and send camera image to the server."""
-
     cap = cv2.VideoCapture(0)
     # 创建 RTP 连接
     pc = RTCPeerConnection()

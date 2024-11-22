@@ -6,9 +6,9 @@ from config import *
 from flask import Flask, request, jsonify
 import asyncio
 from log_register_func import *
+import api
 
-
-from api import app
+established_client = None
 
 
 class ConferenceClient:
@@ -38,6 +38,11 @@ class ConferenceClient:
         self.on_meeting = False  # status
         self.can_share_screen = True
         self.conference_info = None  # you may need to save and update some conference_info regularly
+        self.create_event = asyncio.Event()
+        self.quit_event = asyncio.Event()
+        self.cancel_event = asyncio.Event()
+        self.join_event = asyncio.Event()
+
 
     def create_conference(self):
         """
@@ -53,9 +58,9 @@ class ConferenceClient:
             self.start_conference()
             self.on_meeting = True
             self.keep_share()
-            print(f"[Success]: Conference created with ID {self.conference_id}")
+            return f"[Success]: Conference created with ID {self.conference_id}"
         else:
-            print(f"[Error]: Failed to create conference: {response}")
+            return f"[Error]: Failed to create conference: {response}"
 
     def join_conference(self, conference_id):
         """
@@ -152,6 +157,7 @@ class ConferenceClient:
         # send_data
         await asyncio.gather(receive_text(self),
                              receive_audio(self),
+                             receive_camera(self),
                              output_data(self, fps_or_frequency),
                              send_datas(self),
                              ask_new_clients_and_share_screen(self))
@@ -172,59 +178,37 @@ class ConferenceClient:
 
         # Implementation for toggling data sharing
 
-    def start(self):
+    async def start(self):
         """
         execute functions based on the command line input
         """
+        global established_client
         try:
             established_client, info = connection_establish(self.server_addr)
             print(info)
             while True:
                 if not self.log_status:
-                    cmd_input = input(f'Log or Register (enter "?" to help): ').strip().lower()
-                    encrypted_cmd, pwd_hash = server_message_encrypt(cmd_input)
-                    established_client.send(encrypted_cmd.encode("utf-8"))
-                    recv_data = server_response(established_client, pwd_hash).decode("utf-8")
-                    print(f"recv_data:\n {recv_data}")
-                    if "Login successfully" in recv_data:
+                    if api.login_info["status"]:
+                        print("Login successful.")
                         self.log_status = True
-                        print(f"Welcome {self.user_name}")
                 else:
                     if not self.on_meeting:
-                        status = 'Free'
+                        pass
+                        # if self.join_event.is_set():
+                        #     self.join_conference(api.join_info['con_id'])
+                        #     self.join_event.clear()
                     else:
-                        status = f'OnMeeting-{self.conference_id}'
-                    recognized = True
-                    cmd_input = input(f'({status}) Please enter an operation (enter "?" to help): ').strip().lower()
-                    fields = cmd_input.split(maxsplit=1)
-                    if len(fields) == 1:
-                        if cmd_input in ('?', '？'):
-                            print(HELP)
-                        elif cmd_input == 'create':
-                            self.create_conference()
-                        elif cmd_input == 'quit':
-                            self.quit_conference()
-                        elif cmd_input == 'cancel':
-                            self.cancel_conference()
-                        else:
-                            recognized = False
-                    elif len(fields) == 2:
-                        if fields[0] == 'join':
-                            input_conf_id = fields[1]
-                            if input_conf_id.isdigit():
-                                self.join_conference(input_conf_id)
-                            else:
-                                print('[Warn]: Input conference ID must be in digital form')
-                        elif fields[0] == 'switch':
-                            data_type = fields[1]
-                            self.share_switch(data_type)
-                        else:
-                            recognized = False
-                    else:
-                        recognized = False
-
-                    if not recognized:
-                        print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
+                        pass
+                        # done, pending = await asyncio.wait(
+                        #     [self.create_event.wait(), self.join_event.wait()],
+                        #     return_when=asyncio.FIRST_COMPLETED
+                        # )
+                        # if self.quit_event.is_set():
+                        #     self.quit_conference()
+                        #     self.quit_event.clear()
+                        # if self.cancel_event.is_set():
+                        #     self.cancel_conference()
+                        #     self.cancel_event.clear()
         except Exception as e:
             print("[Warn]: Exception occurred:\n", e)
         # Close the connection when the application ends
@@ -233,6 +217,6 @@ class ConferenceClient:
 if __name__ == '__main__':
     print("欢迎使用在线会议服务")
     client1 = ConferenceClient()
-    app.config['CLIENT_INSTANCE'] = client1
-    app.run(debug=False)
-    client1.start()
+    api.app.config['CLIENT_INSTANCE'] = client1
+    established_client, info = connection_establish(client1.server_addr)
+    api.app.run(debug=False)
