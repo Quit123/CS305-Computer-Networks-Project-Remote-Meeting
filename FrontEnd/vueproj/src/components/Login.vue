@@ -75,8 +75,7 @@ export default {
       }
     },
     handleRegister() {
-      console.log('注册:', this.username, this.password);
-      alert('注册功能待实现！');
+      this.$router.push('/register');
     },
   },
 };

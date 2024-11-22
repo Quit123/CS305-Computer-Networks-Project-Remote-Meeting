@@ -75,7 +75,7 @@ export default {
       }
     },
     handleLogin() {
-      this.$router.push('/login');
+      this.$router.push('/');
     },
   },
 };

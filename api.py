@@ -2,10 +2,10 @@ from flask import Flask, request, jsonify
 import asyncio
 import util
 from log_register_func import *
-from conf_client import ConferenceClient
+from flask_cors import CORS
 
 app = Flask(__name__)
-
+CORS(app)
 
 client_instance = app.config.get('CLIENT_INSTANCE')
 
