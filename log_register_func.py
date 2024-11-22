@@ -128,7 +128,7 @@ def user_register(cmd, users):
     return SUCCESS(f"User: {username} : Registering successfully")
 
 
-def login_authentication(conn, cmd, users):
+async def login_authentication(writer, reader, cmd, users):
     """
     Task 2.3 Login authentication
         You can simply use password comparison for authentication (Task 2.3 basic score)
@@ -149,9 +149,9 @@ def login_authentication(conn, cmd, users):
         return FAILURE("Password is incorrect"), None
     else:
         challenge = generate_challenge()
-        conn.sendall(challenge)
+        await writer.write(challenge)
 
-        client_response = conn.recv(1024)
+        client_response = await reader.read(1024)
 
         expected_response = calculate_response(password, challenge)
 
