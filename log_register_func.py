@@ -7,6 +7,7 @@ import random
 import ast
 import fileinput
 import conf_client
+
 user_inf_txt = 'users.txt'
 login_commands = [
     '?',

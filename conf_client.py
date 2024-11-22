@@ -9,6 +9,8 @@ from log_register_func import *
 import api
 
 established_client = None
+
+
 class ConferenceClient:
     def __init__(self, host='127.0.0.1'):
         # sync client
@@ -36,6 +38,11 @@ class ConferenceClient:
         self.on_meeting = False  # status
         self.can_share_screen = True
         self.conference_info = None  # you may need to save and update some conference_info regularly
+        self.create_event = asyncio.Event()
+        self.quit_event = asyncio.Event()
+        self.cancel_event = asyncio.Event()
+        self.join_event = asyncio.Event()
+
 
     def create_conference(self):
         """
@@ -51,9 +58,9 @@ class ConferenceClient:
             self.start_conference()
             self.on_meeting = True
             self.keep_share()
-            print(f"[Success]: Conference created with ID {self.conference_id}")
+            return f"[Success]: Conference created with ID {self.conference_id}"
         else:
-            print(f"[Error]: Failed to create conference: {response}")
+            return f"[Error]: Failed to create conference: {response}"
 
     def join_conference(self, conference_id):
         """
@@ -150,6 +157,7 @@ class ConferenceClient:
         # send_data
         await asyncio.gather(receive_text(self),
                              receive_audio(self),
+                             receive_camera(self),
                              output_data(self, fps_or_frequency),
                              send_datas(self),
                              ask_new_clients_and_share_screen(self))
@@ -170,7 +178,7 @@ class ConferenceClient:
 
         # Implementation for toggling data sharing
 
-    def start(self):
+    async def start(self):
         """
         execute functions based on the command line input
         """
@@ -185,24 +193,22 @@ class ConferenceClient:
                         self.log_status = True
                 else:
                     if not self.on_meeting:
-                        status = 'Free'
-                        if api.create:
-                            self.create_conference()
-                            api.create = False
-                        if api.join_info['click']:
-                            self.join_conference(api.join_info['con_id'])
-                            api.join_info['click'] = False
+                        pass
+                        # if self.join_event.is_set():
+                        #     self.join_conference(api.join_info['con_id'])
+                        #     self.join_event.clear()
                     else:
-                        status = f'OnMeeting-{self.conference_id}'
-                        if api.quit:
-                            self.quit_conference()
-                            api.quit = False
-                        if api.cancel:
-                            self.cancel_conference()
-                            api.cancel = False
-                    recognized = True
-                    if not recognized:
-                        print(f'[Warn]: Unrecognized')
+                        pass
+                        # done, pending = await asyncio.wait(
+                        #     [self.create_event.wait(), self.join_event.wait()],
+                        #     return_when=asyncio.FIRST_COMPLETED
+                        # )
+                        # if self.quit_event.is_set():
+                        #     self.quit_conference()
+                        #     self.quit_event.clear()
+                        # if self.cancel_event.is_set():
+                        #     self.cancel_conference()
+                        #     self.cancel_event.clear()
         except Exception as e:
             print("[Warn]: Exception occurred:\n", e)
         # Close the connection when the application ends
@@ -211,6 +217,6 @@ class ConferenceClient:
 if __name__ == '__main__':
     print("欢迎使用在线会议服务")
     client1 = ConferenceClient()
-    app.config['CLIENT_INSTANCE'] = client1
-    app.run(debug=False)
-    client1.start()
+    api.app.config['CLIENT_INSTANCE'] = client1
+    established_client, info = connection_establish(client1.server_addr)
+    api.app.run(debug=False)
