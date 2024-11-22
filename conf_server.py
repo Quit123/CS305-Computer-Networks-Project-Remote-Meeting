@@ -222,14 +222,14 @@ class MainServer:
                 print(f'{client_address}{receive_data}')
                 if message.startswith('[COMMAND]:'):
                     opera = message.split('[COMMAND]:')[1]
-                    if opera.startswith('Create'):
+                    if opera.startswith('CREATE'):
                         await self.handle_creat_conference(reader, writer)
-                    elif opera.startswith('Join'):
+                    elif opera.startswith('JOIN'):
                         conference_id = message.split()[1]
                         await self.handle_join_conference(reader, writer, conference_id, message)
-                    elif opera.startswith('Quit'):
+                    elif opera.startswith('QUIT'):
                         await self.handle_quit_conference(reader, writer, message)
-                    elif opera.startswith('Cancel'):
+                    elif opera.startswith('CANCEL'):
                         conference_id = opera.split()[1]
                         await self.handle_cancel_conference(reader, writer, conference_id, message)
                 else:
