@@ -6,11 +6,9 @@ from config import *
 from flask import Flask, request, jsonify
 import asyncio
 from log_register_func import *
+import api
 
-
-from api import app
-
-
+established_client = None
 class ConferenceClient:
     def __init__(self, host='127.0.0.1'):
         # sync client
@@ -176,55 +174,35 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
+        global established_client
         try:
             established_client, info = connection_establish(self.server_addr)
             print(info)
             while True:
                 if not self.log_status:
-                    cmd_input = input(f'Log or Register (enter "?" to help): ').strip().lower()
-                    encrypted_cmd, pwd_hash = server_message_encrypt(cmd_input)
-                    established_client.send(encrypted_cmd.encode("utf-8"))
-                    recv_data = server_response(established_client, pwd_hash).decode("utf-8")
-                    print(f"recv_data:\n {recv_data}")
-                    if "Login successfully" in recv_data:
+                    if api.login_info["status"]:
+                        print("Login successful.")
                         self.log_status = True
-                        print(f"Welcome {self.user_name}")
                 else:
                     if not self.on_meeting:
                         status = 'Free'
+                        if api.create:
+                            self.create_conference()
+                            api.create = False
+                        if api.join_info['click']:
+                            self.join_conference(api.join_info['con_id'])
+                            api.join_info['click'] = False
                     else:
                         status = f'OnMeeting-{self.conference_id}'
-                    recognized = True
-                    cmd_input = input(f'({status}) Please enter an operation (enter "?" to help): ').strip().lower()
-                    fields = cmd_input.split(maxsplit=1)
-                    if len(fields) == 1:
-                        if cmd_input in ('?', '？'):
-                            print(HELP)
-                        elif cmd_input == 'create':
-                            self.create_conference()
-                        elif cmd_input == 'quit':
+                        if api.quit:
                             self.quit_conference()
-                        elif cmd_input == 'cancel':
+                            api.quit = False
+                        if api.cancel:
                             self.cancel_conference()
-                        else:
-                            recognized = False
-                    elif len(fields) == 2:
-                        if fields[0] == 'join':
-                            input_conf_id = fields[1]
-                            if input_conf_id.isdigit():
-                                self.join_conference(input_conf_id)
-                            else:
-                                print('[Warn]: Input conference ID must be in digital form')
-                        elif fields[0] == 'switch':
-                            data_type = fields[1]
-                            self.share_switch(data_type)
-                        else:
-                            recognized = False
-                    else:
-                        recognized = False
-
+                            api.cancel = False
+                    recognized = True
                     if not recognized:
-                        print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
+                        print(f'[Warn]: Unrecognized')
         except Exception as e:
             print("[Warn]: Exception occurred:\n", e)
         # Close the connection when the application ends
