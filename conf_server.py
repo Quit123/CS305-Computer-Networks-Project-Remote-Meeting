@@ -11,21 +11,23 @@ class ConferenceServer:
         # async server
         self.conference_id = conference_id  # conference_id for distinguish difference conference
         self.conf_serve_ports = 8005
-        self.data_serve_ports = [8001, 8002, 8003, 8004]
-        self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
-        self.clients_info = []
+        self.data_serve_ports = [8001,8002,8003,8004]
+        self.data_types = ['audio','screen', 'camera','text']  # example data types in a video conference
+        self.user_name = []
         self.client_conns = []
+        self.servers = []
+        self.online_users = 0
+        self.last_online_users = 0
+        self.last_join_user = "NULL"
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.run = True
 
-    async def handle_data(self, reader: StreamReader, writer: StreamWriter):
+    async def handle_data(self, reader:StreamReader, writer:StreamWriter, server):
         """
         running task: receive sharing stream data from a client and decide how to forward them to the rest clients
         """
         while self.run:
             data = await reader.read(1024)
-            if not data:
-                break
             for w in self.client_conns:
                 if w != writer:
                     w.write(data)
@@ -33,7 +35,38 @@ class ConferenceServer:
         writer.close()
         await writer.wait_closed()
 
-    async def handle_client(self, reader: StreamReader, writer: StreamWriter, server):
+    async def handle_client(self, reader:StreamReader, writer:StreamWriter, message, user_name):
+        """
+        running task: handle the in-meeting requests or messages from clients
+        """
+        message = message.decode()
+        parts = message.strip().spilt()
+        if(parts[1]=="JOIN"):
+            if(writer not in self.client_conns):
+                self.client_conns.append(writer)
+                self.user_name.append(user_name)
+                self.online_users+=1
+                self.last_join_user = user_name
+                writer.write("SUCCESS join confernece".encode())
+                await writer.drain()
+            else:
+                writer.write("FAILURE wrong user".encode())
+                await writer.drain()
+        elif(parts[1]=="QUIT"):
+            if(writer in self.client_conns):
+                self.client_conns.remove(writer)
+                self.user_name.remove(user_name)
+                self.last_online_users-=1
+                writer.write("SUCCESS quit confernece".encode())
+                await writer.drain()
+            else:
+                writer.write("FAILURE wrong user".encode())
+                await writer.drain()                
+        else:
+            writer.write("FAILURE invalid command".encode())
+            await writer.drain()
+
+    async def _handle_client(self, reader:StreamReader, writer:StreamWriter, server):
         """
         running task: handle the in-meeting requests or messages from clients
         """
@@ -42,22 +75,16 @@ class ConferenceServer:
         while self.run:
             message = await reader.read(1024).decode()
             parts = message.strip().spilt()
-            if (parts[0].startwith('[COMMAND]')):
-                if (parts[1] == "JOIN" & float(parts[1]) == self.conference_id):
-                    if (writer not in self.client_conns):
-                        self.client_conns.append(writer)
-                        writer.write("SUCCESS join confernece".encode())
-                        await writer.drain()
-                elif (parts[1] == "QUIT" & float(parts[1]) == self.conference_id):
-                    if (writer in self.client_conns):
-                        self.client_conns.remove(writer)
-                        writer.write("SUCCESS quit confernece".encode())
-                        await writer.drain()
-                else:
-                    writer.write("FAILURE invalid command".encode())
+            if(parts[0].startwith('[ASK]')):
+                if(self.online_users>self.last_online_users):
+                    writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
                     await writer.drain()
+                else:
+                    writer.write("[ANS]: No False".encode())
+                    await writer.drain()
+                self.last_online_users = self.online_users
             else:
-                print("get wrong message")
+                print("invalid command")
                 writer.write("FAILURE invalid command".encode())
                 await writer.drain()
 
@@ -74,18 +101,25 @@ class ConferenceServer:
         for writer in self.client_conns:
             writer.close()
             await writer.wait_closed()
+        for server in self.servers:
+            server.close()
+            await server.wait_closed()
         self.client_conns.clear()
 
     async def build(self):
-        server = await asyncio.start_server(lambda r, w: self.handle_client(r, w, server), '127.0.0.1', 8005)
-        audio_server = await asyncio.start_server(lambda r, w: self.handle_data(r, w, server), '127.0.0.1', 8001)
-        screen_server = await asyncio.start_server(lambda r, w: self.handle_data(r, w, server), '127.0.0.1', 8002)
-        camera_server = await asyncio.start_server(lambda r, w: self.handle_data(r, w, server), '127.0.0.1', 8003)
-        text_server = await asyncio.start_server(lambda r, w: self.handle_data(r, w, server), '127.0.0.1', 8004)
+        server = await asyncio.start_server(lambda r, w:self._handle_client(r,w,server), '127.0.0.1', 8005)
+        audio_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8001)
+        screen_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8002)
+        camera_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8003)
+        text_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8004)
+        self.servers.append(server)
+        self.servers.append(audio_server)
+        self.servers.append(screen_server)
+        self.servers.append(camera_server)
+        self.servers.append(text_server)
         async with server, audio_server, screen_server, camera_server, text_server:
-            await asyncio.gather(server.serve_forever(), audio_server.serve_forever(),
-                                 screen_server.serve_forever(), camera_server.serve_forever(),
-                                 text_server.serve_forever())
+            await asyncio.gather(server.serve_forever(), audio_server.serve_forever(), 
+                                 screen_server.serve_forever(), camera_server.serve_forever(), text_server.serve_forever())
 
     def start(self):
         '''
