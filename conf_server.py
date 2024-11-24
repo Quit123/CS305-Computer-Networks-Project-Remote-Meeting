@@ -161,7 +161,8 @@ class MainServer:
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
         new_conference.start()
-        await writer.write(f'Conference Created: {conference_id}'.encode())  # 返回会议号
+        writer.write(f'Conference Created: {conference_id}'.encode())  # 返回会议号
+        await writer.drain()
 
     async def handle_join_conference(self, reader, writer, conference_id, message):
         """
@@ -170,14 +171,17 @@ class MainServer:
         if conference_id in self.conference_servers:  # 如果可以通过会议id找到会议
             if (writer, reader)in self.clients_info:  #
                 cid = self.clients_info[(writer, reader)]
-                await writer.write(f'You have already joined the conference {cid}'.encode())
+                writer.write(f'You have already joined the conference {cid}'.encode())
+                await writer.drain()
             else:
                 conference = self.conference_servers[conference_id]
                 conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
                 self.clients_info[(writer, reader)] = conference_id  # 标识每个客户端加入的会议
-                await writer.write(f'Joined Conference: {conference_id}'.encode())
+                writer.write(f'Joined Conference: {conference_id}'.encode())
+                await writer.drain()
         else:
-            await writer.write('Conference not found'.encode())
+            writer.write('Conference not found'.encode())
+            await writer.drain()
 
     async def handle_quit_conference(self, writer, reader, message):
         """
@@ -187,9 +191,11 @@ class MainServer:
             cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
             self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
             self.clients_info.pop((writer, reader))  # 该用户未加入会议
-            await writer.write(f'Quit Conference: {cid}'.encode())
+            writer.write(f'Quit Conference: {cid}'.encode())
+            await writer.drain()
         else:
-            await writer.write('You do not have a meeting now'.encode())
+            writer.write('You do not have a meeting now'.encode())
+            await writer.drain()
         pass
 
     async def handle_cancel_conference(self, reader, writer, conference_id, message):
@@ -197,14 +203,16 @@ class MainServer:
         cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
         """
         if self.conference_manager[conference_id] == (writer, reader):  # 确认该用户是否有管理权限
-            self.conference_servers[conference_id].handle_client(reader, writer, message)  # 有的话发送给conference_server
+            self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
             self.conference_manager.pop((writer, reader))
             for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
                 self.clients_info.pop((w, r))
             self.conference_servers.pop(conference_id)  # 删除该会议
-            await writer.write(f'Cancel Conference: {conference_id}'.encode())
+            writer.write(f'Cancel Conference: {conference_id}'.encode())
+            await writer.drain()
         else:
-            await writer.write('Permission deny'.encode())
+            writer.write('Permission deny'.encode())
+            await writer.drain()
 
     async def request_handler(self, reader, writer):
         """
@@ -214,13 +222,13 @@ class MainServer:
         with open("command.txt", "a") as f:
             while self.running:
                 client_address = writer.get_extra_info('peername')
+                print(f'{client_address[0]}: {client_address[1]}')
                 receive_data = await reader.read(1024)
                 message = receive_data.decode()
-                if not message:
-                    break
-                f.write(f'{client_address}' + receive_data + '\n')
-                print(f'{client_address}{receive_data}')
+                f.write(f'{client_address}' + message + '\n')
+                print(f'{client_address}:{message}')
                 if message.startswith('[COMMAND]:'):
+                    print('here:'+message)
                     opera = message.split('[COMMAND]:')[1]
                     if opera.startswith('CREATE'):
                         await self.handle_creat_conference(reader, writer)
@@ -239,7 +247,7 @@ class MainServer:
                             feedback_data = 'Please re-enter the login commend with your username and password'
                             feedback_data = FAILURE(feedback_data)
                         elif len(cmd) == 3:
-                            feedback_data, login_user = login_authentication(writer, reader, cmd, users)
+                            feedback_data, login_user = await login_authentication(writer, reader, cmd, users)
                         else:
                             feedback_data = "Password shouldn't include spaces"
                             feedback_data = FAILURE(feedback_data)
@@ -253,6 +261,7 @@ class MainServer:
                         else:
                             feedback_data = user_register(cmd, users)
                     writer.write(feedback_data.encode())
+                    await writer.drain()
                     if feedback_data == '200:disconnected':
                         print(f'Client {client_address} disconnected')
                         writer.close()
