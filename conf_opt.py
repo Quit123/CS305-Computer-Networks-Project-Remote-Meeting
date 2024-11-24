@@ -7,21 +7,17 @@ import socket
 from util import *
 from aiortc import VideoStreamTrack, RTCPeerConnection
 from aiortc.contrib.media import MediaPlayer, MediaRelay
+from api import app
+
+client_instance = app.config.get('CLIENT_INSTANCE')
 
 
 async def establish_connect(self):
     try:
         for type in self.support_data_types:
             port = self.ports.get(type)
-            if type == 'camera':
-                self.sockets[type] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                # 设置为 非阻塞模式
-                self.sockets[type].setblocking(False)
-                # 为什么要await？
-                await asyncio.get_event_loop().sock_connect(self.sock, (self.server_addr[0], port))
-            else:
-                reader, writer = await asyncio.open_connection(self.server_addr[0], port)
-                self.sockets[type] = (reader, writer)
+            reader, writer = await asyncio.open_connection(self.server_addr[0], port)  # Add await here
+            self.sockets[type] = (reader, writer)
         print(f"[Info]: Connected to '{self.server_addr}' server.")
     except Exception as e:
         print(f"[Error]: Could not connect to '{self.server_addr}' server: {e}")
@@ -248,12 +244,14 @@ class CameraStreamTrack(VideoStreamTrack):
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
 
     async def recv(self):
-        ret, frame = self.cap.read()  # 获取视频帧
-        if not ret:
-            raise Exception("Cannot read frame")
-        pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        frame_bytes = self.compress_image(pil_image)
-        return frame_bytes
+        if client_instance.acting_data_types['camera']:
+            ret, frame = self.cap.read()  # 获取视频帧
+            if not ret:
+                raise Exception("Cannot read frame")
+            pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            frame_bytes = self.compress_image(pil_image)
+            await asyncio.sleep(1 / 30)
+            return frame_bytes
 
     @staticmethod
     def compress_image(image, format='JPEG', quality=85):

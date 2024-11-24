@@ -95,6 +95,7 @@
 <script>
 import {message} from "ant-design-vue";
 import 'ant-design-vue/es/message/style/css'
+import axios from "axios";
 
 export default {
   data() {
@@ -130,16 +131,26 @@ export default {
       console.log("showCreateMeeting")
       this.isCreateMeetingVisible = true;
     },
-    createMeeting() {
+    async createMeeting() {
       if (!this.meeting.title) {
         console.log(this.meeting.title)
         return message.error("请填写会议主题！");
       }
 
-      console.log("创建会议数据：", this.meeting);
-      message.success("会议创建成功！");
-      this.resetForm();
-      this.joinMeeting();
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/create', {
+          title: this.meeting.title,
+        });
+        if (response.data.status === 'success') {
+          message.success("会议创建成功！");
+          this.resetForm();
+          this.joinMeeting();
+        } else {
+          message.error("会议创建失败：" + response.data.message);
+        }
+      } catch (error) {
+        message.error("会议创建失败：" + error.message);
+      }
     },
     resetForm() {
       this.meeting = {
