@@ -1,13 +1,13 @@
 <template>
-  <div class="login-page">
-    <div class="login-container">
-      <a-card bordered={false} class="login-card">
-        <div class="login-header">
-          <h1>登录到你的账户</h1>
+  <div class="register-page">
+    <div class="register-container">
+      <a-card bordered={false} class="register-card">
+        <div class="register-header">
+          <h1>注册一个新账户</h1>
         </div>
         <a-form
             layout="vertical"
-            @submit.prevent="handleLogin"
+            @submit.prevent="handleRegister"
         >
           <!-- 输入账号 -->
           <a-form-item label="邮箱">
@@ -27,23 +27,23 @@
                 class="custom-input"
             />
           </a-form-item>
-          <!-- 登录按钮 -->
+          <!-- 注册按钮 -->
           <a-form-item>
             <a-button
                 type="primary"
                 size="large"
                 block
-                @click="handleLogin"
+                @click="handleRegister"
                 class="custom-button"
             >
-              登录
+              注册
             </a-button>
           </a-form-item>
         </a-form>
-        <!-- 注册链接 -->
-        <div class="register-link">
-          <span>还没有账号？</span>
-          <a @click="handleRegister">点击注册</a>
+        <!-- 登录链接 -->
+        <div class="login-link">
+          <span>已经有账号？</span>
+          <a @click="handleLogin">点击登录</a>
         </div>
       </a-card>
     </div>
@@ -61,21 +61,21 @@ export default {
     };
   },
   methods: {
-    async handleLogin() {
+    async handleRegister() {
       try {
-        const response = await axios.post('http://127.0.0.1:5000/api/login' ,{
+        const response = await axios.post('http://127.0.0.1:5000/api/register', {
           username: this.username,
           password: this.password,
         });
-        console.log('登录成功:', response.data);
-        this.$router.push('/dashboard');
+        console.log('注册成功:', response.data);
+        this.$router.push('/login');
       } catch (error) {
-        console.error('登录失败:', error);
-        alert('登录失败，请检查您的用户名和密码。');
+        console.error('注册失败:', error);
+        alert('注册失败，请检查您的信息。');
       }
     },
-    handleRegister() {
-      this.$router.push('/register');
+    handleLogin() {
+      this.$router.push('/');
     },
   },
 };
@@ -83,7 +83,7 @@ export default {
 
 <style scoped>
 /* 背景样式 */
-.login-page {
+.register-page {
   background: url('https://source.unsplash.com/1920x1080/?network,technology') no-repeat center center/cover;
   height: 100vh;
   display: flex;
@@ -92,12 +92,12 @@ export default {
 }
 
 /* 卡片容器样式 */
-.login-container {
+.register-container {
   width: 360px;
 }
 
 /* 卡片样式 */
-.login-card {
+.register-card {
   backdrop-filter: blur(8px);
   background: rgba(255, 255, 255, 0.9);
   padding: 24px 32px;
@@ -106,7 +106,7 @@ export default {
 }
 
 /* 标题样式 */
-.login-header h1 {
+.register-header h1 {
   margin: 0 0 24px 0;
   text-align: center;
   font-size: 22px;
@@ -135,22 +135,22 @@ export default {
   color: white;
 }
 
-/* 注册链接样式 */
-.register-link {
+/* 登录链接样式 */
+.login-link {
   margin-top: 16px;
   text-align: center;
   font-size: 14px;
   color: #666;
 }
 
-.register-link a {
+.login-link a {
   color: #1890ff;
   font-weight: bold;
   text-decoration: none;
   cursor: pointer;
 }
 
-.register-link a:hover {
+.login-link a:hover {
   text-decoration: underline;
 }
 
@@ -160,7 +160,7 @@ export default {
   padding: 0 16px; /* 调整输入框内的左右内边距 */
 }
 
-/* 登录按钮样式调整 */
+/* 注册按钮样式调整 */
 .custom-button {
   height: 50px; /* 与输入框高度保持一致 */
 }
@@ -178,7 +178,7 @@ export default {
 }
 
 /* 如果需要调整整个卡片内容的水平间距 */
-.login-card {
+.register-card {
   display: flex;
   flex-direction: column;
   justify-content: center;

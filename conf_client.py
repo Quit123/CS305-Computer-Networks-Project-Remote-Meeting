@@ -42,24 +42,26 @@ class ConferenceClient:
         self.quit_event = asyncio.Event()
         self.cancel_event = asyncio.Event()
         self.join_event = asyncio.Event()
+        self.established_client = None
 
-
-    def create_conference(self):
+    async def create_conference(self, name):
         """
         create a conference: send create-conference request to server and obtain necessary data to
         receive conference id.
         """
         print("[Info]: Creating a new conference...")
-        request_data = "[COMMAND]: Create Conference"
+        request_data = f"[COMMAND]: Create Conference {name}"
+        await self.start_conference()
         response = asyncio.run(self.send_request(request_data))
-        if response.startswith("SUCCESS"):
+        if "SUCCESS" in response:
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
-            self.start_conference()
             self.on_meeting = True
-            self.keep_share()
+            await self.keep_share()
+            print(f"[Success]: Conference created with ID {self.conference_id}")
             return f"[Success]: Conference created with ID {self.conference_id}"
         else:
+            print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
 
     def join_conference(self, conference_id):
@@ -68,16 +70,19 @@ class ConferenceClient:
         """
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
+        self.start_conference()
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = asyncio.run(self.send_request(request_data))
-        if response.startswith("SUCCESS"):
+        if "SUCCESS" in response:
             self.conference_id = conference_id
-            self.start_conference()
+
             self.on_meeting = True
             self.keep_share()
             print(f"[Success]: Joined conference {self.conference_id}")
+            return f"[Success]: CJoined conference {self.conference_id}"
         else:
             print(f"[Error]: Failed to join conference: {response}")
+            return f"[Error]: Failed to join conference: {response}"
 
     def quit_conference(self):
         """
@@ -89,7 +94,7 @@ class ConferenceClient:
         print("[Info]: Quitting conference...")
         request_data = f"[COMMAND]: QUIT ID {self.conference_id}"
         response = asyncio.run(self.send_request(request_data))
-        if response.startswith("SUCCESS"):
+        if "SUCCESS" in response:
             self.close_conference()
             self.on_meeting = False
             self.conference_id = None
@@ -112,13 +117,13 @@ class ConferenceClient:
         else:
             print(f"[Error]: Failed to cancel conference: {response}")
 
-    def start_conference(self):
+    async def start_conference(self):
         """
             init conns when create or join a conference with necessary conference_info
             and
             start necessary running task for conference
             """
-        establish_connect(self)
+        await establish_connect(self)
         print("[Info]: Initializing conference...")
 
     def close_conference(self):
@@ -182,41 +187,44 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
-        global established_client
-        try:
-            established_client, info = connection_establish(self.server_addr)
-            print(info)
-            while True:
-                if not self.log_status:
-                    if api.login_info["status"]:
-                        print("Login successful.")
-                        self.log_status = True
-                else:
-                    if not self.on_meeting:
-                        pass
-                        # if self.join_event.is_set():
-                        #     self.join_conference(api.join_info['con_id'])
-                        #     self.join_event.clear()
-                    else:
-                        pass
-                        # done, pending = await asyncio.wait(
-                        #     [self.create_event.wait(), self.join_event.wait()],
-                        #     return_when=asyncio.FIRST_COMPLETED
-                        # )
-                        # if self.quit_event.is_set():
-                        #     self.quit_conference()
-                        #     self.quit_event.clear()
-                        # if self.cancel_event.is_set():
-                        #     self.cancel_conference()
-                        #     self.cancel_event.clear()
-        except Exception as e:
-            print("[Warn]: Exception occurred:\n", e)
-        # Close the connection when the application ends
+        # global established_client
+        # try:
+        #     established_client, info = connection_establish(self.server_addr)
+        #     print(info)
+        #     while True:
+        #         if not self.log_status:
+        #             if api.login_info["status"]:
+        #                 print("Login successful.")
+        #                 self.log_status = True
+        #         else:
+        #             if not self.on_meeting:
+        #                 pass
+        #                 # if self.join_event.is_set():
+        #                 #     self.join_conference(api.join_info['con_id'])
+        #                 #     self.join_event.clear()
+        #             else:
+        #                 pass
+        #                 # done, pending = await asyncio.wait(
+        #                 #     [self.create_event.wait(), self.join_event.wait()],
+        #                 #     return_when=asyncio.FIRST_COMPLETED
+        #                 # )
+        #                 # if self.quit_event.is_set():
+        #                 #     self.quit_conference()
+        #                 #     self.quit_event.clear()
+        #                 # if self.cancel_event.is_set():
+        #                 #     self.cancel_conference()
+        #                 #     self.cancel_event.clear()
+        # except Exception as e:
+        #     print("[Warn]: Exception occurred:\n", e)
+        # # Close the connection when the application ends
 
 
 if __name__ == '__main__':
     print("欢迎使用在线会议服务")
     client1 = ConferenceClient()
-    api.app.config['CLIENT_INSTANCE'] = client1
     established_client, info = connection_establish(client1.server_addr)
+    client1.established_client = established_client
+    api.app.config['CLIENT_INSTANCE'] = client1
+    print("established_client:", established_client)
+    print(info)
     api.app.run(debug=False)

@@ -6,7 +6,6 @@ import re
 import random
 import ast
 import fileinput
-import conf_client
 
 user_inf_txt = 'users.txt'
 login_commands = [
@@ -163,7 +162,7 @@ async def login_authentication(writer, reader, cmd, users):
             return FAILURE("Failed to login"), None
 
 
-def server_message_encrypt(message):
+def server_message_encrypt(message, client_instance):
     """
     Task 3.1 Determine whether the command is "login", "register", or "changepwd",
     If so, it encrypts the password in the command and returns the encrypted message and Password
@@ -173,6 +172,7 @@ def server_message_encrypt(message):
     """
 
     # TODO: finish the codes
+    global established_client
     def encrypt(type, cmd):
         unencrypted_message = cmd[type - 1]
         if len(cmd) > type:
@@ -190,23 +190,24 @@ def server_message_encrypt(message):
     cmd = message.split()
     if cmd[0] in ['login', 'register']:
         if len(cmd) < 3:
-            conf_client.established_client.send(message.encode("utf-8"))
-            recv_data = server_response(conf_client.established_client, None).decode("utf-8")
+            client_instance.established_client.send(message.encode("utf-8"))
+            recv_data = server_response(client_instance.established_client, None).decode("utf-8")
             return recv_data
         else:
+            print("conf_client.established_client:", client_instance.established_client)
             encrypted_message, encrypted_password = encrypt(3, cmd)
-            conf_client.established_client.send(encrypted_message.encode("utf-8"))
-            recv_data = server_response(conf_client.established_client, encrypted_password).decode("utf-8")
+            client_instance.established_client.send(encrypted_message.encode("utf-8"))
+            recv_data = server_response(client_instance.established_client, encrypted_password).decode("utf-8")
             return recv_data
     elif cmd[0] == 'changepwd':
         if len(cmd) < 2:
-            conf_client.established_client.send(message.encode("utf-8"))
-            recv_data = server_response(conf_client.established_client, None).decode("utf-8")
+            client_instance.established_client.send(message.encode("utf-8"))
+            recv_data = server_response(client_instance.established_client, None).decode("utf-8")
             return recv_data
         else:
             encrypted_message, encrypted_password = encrypt(2, cmd)
-            conf_client.established_client.send(encrypted_message.encode("utf-8"))
-            recv_data = server_response(conf_client.established_client, encrypted_password).decode("utf-8")
+            client_instance.established_client.send(encrypted_message.encode("utf-8"))
+            recv_data = server_response(client_instance.established_client, encrypted_password).decode("utf-8")
             return recv_data
     else:
         return message, None

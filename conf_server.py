@@ -11,8 +11,8 @@ class ConferenceServer:
         # async server
         self.conference_id = conference_id  # conference_id for distinguish difference conference
         self.conf_serve_ports = 8005
-        self.data_serve_ports = [8001,8002,8003,8004]
-        self.data_types = ['audio','screen', 'camera','text']  # example data types in a video conference
+        self.data_serve_ports = [8001, 8002, 8003, 8004]
+        self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
         self.user_name = []
         self.client_conns = []
         self.servers = []
