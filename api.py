@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 import asyncio
 import util
 from log_register_func import *
-from conf_client import ConferenceClient
 
 app = Flask(__name__)
 

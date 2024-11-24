@@ -151,8 +151,8 @@ async def login_authentication(writer, reader, cmd, users):
         return FAILURE("Password is incorrect"), None
     else:
         challenge = generate_challenge()
-        await writer.write(challenge)
-
+        writer.write(challenge)
+        await writer.drain()
         client_response = await reader.read(1024)
 
         expected_response = calculate_response(password, challenge)
