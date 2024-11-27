@@ -1,90 +1,82 @@
 <template>
-  <div class="meeting">
-    <div class="header">{{ meetingTitle }}</div>
-    <div class="content">
-      <div class="video-section">
-        <a-button class="pagination-button left" icon="left" @click="prevPage" :disabled="currentPage === 1">
-          <img src="@/assets/left.ico" alt="left" />
-        </a-button>
+  <a-layout>
+    <a-layout-header>
+      <h1 style="color: white; text-align: center">{{ this.tittle }}</h1>
+    </a-layout-header>
+    <a-layout class="meeting-container">
+      <a-layout-content class="video-section">
         <div class="video-grid">
-          <a-row :gutter="16">
-            <a-col v-for="(video, index) in paginatedVideos" :key="index" :span="8">
-              <div class="video-container">
-                <video :src="video.stream" autoplay></video>
-                <div class="username">{{ video.username }}</div>
-              </div>
-            </a-col>
-          </a-row>
+          <div v-for="(video, index) in paginatedVideos" :key="index" class="video-container">
+            <video :src="video.src" autoplay></video>
+          </div>
         </div>
-        <a-button class="pagination-button right" icon="right" @click="nextPage" :disabled="currentPage === totalPages">
-          <img src="@/assets/right.ico" alt="right" />
-        </a-button>
-      </div>
-      <div class="chat-section">
-        <a-button class="pagination-button right" icon="right" @click="nextPage" :disabled="currentPage === totalPages">
-          <img src="@/assets/right.ico" alt="right" />
-        </a-button>
-        <ChatBox />
-      </div>
-    </div>
-    <div class="controls">
-      <a-switch
-          checked-children="摄像头开"
-          un-checked-children="摄像头关"
-          @change="toggleCamera"
-          :checked="cameraOn"
-      />
-      <a-switch
-          checked-children="麦克风开"
-          un-checked-children="麦克风关"
-          @change="toggleMicrophone"
-          :checked="microphoneOn"
-      />
-      <a-button type="primary" @click="shareScreen">共享屏幕</a-button>
-      <a-button type="danger" @click="leaveMeeting">退出会议</a-button>
-    </div>
-  </div>
+        <div class="video-pagination">
+          <a-button @click="prevPage" :disabled="currentPage === 1">Previous</a-button>
+          <a-button @click="nextPage" :disabled="currentPage === totalPages">Next</a-button>
+        </div>
+        <div class="controls">
+          <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
+                    @change="toggleCamera"/>
+          <a-switch checked-children="Mic On" un-checked-children="Mic Off" v-model:checked="microphoneOn"
+                    @change="toggleMicrophone"/>
+          <a-button type="primary" class="exit-button" @click="exitMeeting">Exit Meeting</a-button>
+        </div>
+      </a-layout-content>
+      <a-layout-sider class="chat-section" :width="250">
+        <div class="chat-messages">
+          <div v-for="(message, index) in messages" :key="index" class="chat-message">
+            <strong>{{ message.user }}:</strong> {{ message.text }}
+          </div>
+        </div>
+        <div class="chat-input">
+          <a-input v-model:value.lazy="newMessage" @pressEnter="sendMessage" placeholder="Type a message..."/>
+          <a-button @click="sendMessage">Send</a-button>
+        </div>
+      </a-layout-sider>
+    </a-layout>
+  </a-layout>
 </template>
 
 <script>
-import axios from "axios";
-import ChatBox from "@/components/ChatBox.vue";
+import {Layout, Button, Input, Switch} from 'ant-design-vue';
 
 export default {
   components: {
-    ChatBox,
+    'a-layout': Layout,
+    'a-layout-header': Layout.Header,
+    'a-layout-content': Layout.Content,
+    'a-layout-sider': Layout.Sider,
+    'a-button': Button,
+    'a-input': Input,
+    'a-switch': Switch,
   },
   data() {
     return {
-      meetingTitle: '会议标题',
-      videos: [],
+      tittle: 'SUSTeh CS303 Online Meeting App',
+      videos: [
+        {src: 'video1.mp4'},
+        {src: 'video2.mp4'},
+        {src: 'video3.mp4'},
+        {src: 'video4.mp4'},
+        {src: 'video5.mp4'},
+      ],
       currentPage: 1,
+      messages: [],
+      newMessage: '',
       cameraOn: true,
       microphoneOn: true,
     };
   },
   computed: {
     paginatedVideos() {
-      const start = (this.currentPage - 1) * 9;
-      return this.videos.slice(start, start + 9);
+      const start = (this.currentPage - 1) * 4;
+      return this.videos.slice(start, start + 4);
     },
     totalPages() {
-      return Math.ceil(this.videos.length / 9);
+      return Math.ceil(this.videos.length / 4);
     },
   },
   methods: {
-    toggleCamera() {
-      this.cameraOn = !this.cameraOn;
-    },
-    toggleMicrophone() {
-      this.microphoneOn = !this.microphoneOn;
-    },
-    shareScreen() {
-      this.cameraOn = false;
-    },
-    leaveMeeting() {
-      // Handle leaving the meeting
-    },
     prevPage() {
       if (this.currentPage > 1) {
         this.currentPage--;
@@ -95,135 +87,115 @@ export default {
         this.currentPage++;
       }
     },
-    async fetchVideos() {
-      try {
-        const response = await axios.get('http://127.0.0.1:5000/api/videos');
-        this.videos = response.data;
-      } catch (error) {
-        console.error('Failed to fetch videos:', error);
+    sendMessage() {
+      if (this.newMessage.trim()) {
+        this.messages.push({user: 'You', text: this.newMessage});
+        this.newMessage = '';
       }
     },
-  },
-  mounted() {
-    this.fetchVideos();
+    toggleCamera() {
+      console.log('Camera toggled:', this.cameraOn);
+    },
+    toggleMicrophone() {
+      console.log('Microphone toggled:', this.microphoneOn);
+    },
+    exitMeeting() {
+      console.log('Exiting meeting');
+    },
   },
 };
 </script>
 
 <style scoped>
-.meeting {
-  background-color: #000;
-  padding: 8px;
-  min-height: 100vh;
+.meeting-container {
+  height: 60vh;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.header {
-  text-align: center;
-  color: #fff;
-  margin-bottom: 8px;
-  font-size: 1.5em;
-}
-
-.content {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex: 1;
 }
 
 .video-section {
-  flex: 3;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  padding: 10px;
 }
 
 .video-grid {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 10px;
 }
 
 .video-container {
   position: relative;
-  width: 100%;
-  height: 200px;
-  background-color: #333;
+  padding-top: 56.25%; /* 16:9 aspect ratio */
+  background: black;
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 2px solid #ccc;
 }
 
 .video-container video {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
 }
 
-.username {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #fff;
-  background-color: rgba(0, 0, 0, 0.5);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.pagination-button {
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
+.video-pagination {
   display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.pagination-button.left {
-  position: absolute;
-  top: 350px;
-  left: 16px;
-}
-
-.pagination-button.right {
-  position: absolute;
-  top: 350px;
-  right: 400px;
-}
-
-.chat-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 300px;
+  justify-content: space-between;
+  margin: 5px 0;
 }
 
 .controls {
   display: flex;
   justify-content: space-around;
+  padding: 10px;
+  border-top: 1px solid #ccc;
+}
+
+.chat-section {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px;
+  background: rgb(255, 255, 255); /* Add white background */
+  border: 1px solid #ccc; /* Optional: Add border for better visibility */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: Add shadow for better visibility */
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  background: white; /* Ensure messages area has white background */
+  padding: 10px; /* Optional: Add padding for better readability */
+  border: 1px solid #ccc; /* Optional: Add border for better visibility */
+  border-radius: 4px; /* Optional: Add border radius for better aesthetics */
+}
+
+.chat-input {
+  display: flex;
+  gap: 2px;
   align-items: center;
-  padding: 8px;
-  background-color: #111;
+  padding-top: 10px;
+  border-top: 1px solid #ccc;
+  position: fixed;
+  bottom: 10px;
 }
 
-.controls .ant-switch {
-  margin: 0 8px;
+.exit-button {
+  background-color: red;
+  border-color: red;
+  color: white;
 }
 
-.controls .ant-btn-primary {
-  background-color: #1890ff;
-  border-color: #1890ff;
-}
-
-.controls .ant-btn-danger {
-  background-color: #ff4d4f;
-  border-color: #ff4d4f;
+.exit-button:hover {
+  background-color: darkred;
+  border-color: darkred;
 }
 </style>
