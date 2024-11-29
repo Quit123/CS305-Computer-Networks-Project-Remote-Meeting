@@ -22,12 +22,14 @@ class ConferenceServer:
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.run = True
 
-    async def handle_data(self, reader:StreamReader, writer:StreamWriter, server):
+    async def handle_data(self, reader:StreamReader, writer:StreamWriter):
         """
         running task: receive sharing stream data from a client and decide how to forward them to the rest clients
         """
         while self.run:
             data = await reader.read(1024)
+            if not data:
+                break
             for w in self.client_conns:
                 if w != writer:
                     w.write(data)
@@ -40,7 +42,7 @@ class ConferenceServer:
         running task: handle the in-meeting requests or messages from clients
         """
         message = message.decode()
-        parts = message.strip().spilt(" ")
+        parts = message.strip().split(" ")
         if(parts[1]=="JOIN"):
             if(writer not in self.client_conns):
                 self.client_conns.append(writer)
@@ -67,16 +69,14 @@ class ConferenceServer:
             writer.write("FAILURE invalid command".encode())
             await writer.drain()
 
-    async def _handle_client(self, reader:StreamReader, writer:StreamWriter, server):
+    async def _handle_client(self, reader:StreamReader, writer:StreamWriter):
         """
         running task: handle the in-meeting requests or messages from clients
         """
-        ip, port = server.sockets[0].getsockname()
-        print(f"connection from {ip}:{port}")
         while self.run:
             message = await reader.read(1024).decode()
-            parts = message.strip().spilt(" ")
-            if(parts[0].startwith('[ASK]')):
+            parts = message.strip().split(" ")
+            if(parts[0].startswith('[ASK]')):
                 if(self.online_users>self.last_online_users):
                     writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
                     await writer.drain()
@@ -108,23 +108,37 @@ class ConferenceServer:
         self.client_conns.clear()
 
     async def build(self):
-        audio_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8001)
-        screen_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8002)
-        camera_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8003)
-        text_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8004)
-        self.servers.append(server)
-        self.servers.append(audio_server)
-        self.servers.append(screen_server)
-        self.servers.append(camera_server)
-        self.servers.append(text_server)
-        async with server, audio_server, screen_server, camera_server, text_server:
-            await asyncio.gather(audio_server.serve_forever(), screen_server.serve_forever(), camera_server.serve_forever(), text_server.serve_forever())
+        # 启动不同数据类型的服务器
+        print("testb1")
+        self.audio_server, self.screen_server, self.camera_server, self.text_server = (
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8001),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8002),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8004),
+        )
+        print("testb2")
+        # 将服务器引用保存在列表中
+        self.servers = [
+            self.audio_server,
+            self.screen_server,
+            self.camera_server,
+            self.text_server,
+        ]
 
-    def start(self):
+        # 并发运行服务器
+        print("testb3")
+        await asyncio.gather(
+            self.audio_server.serve_forever(),
+            self.screen_server.serve_forever(),
+            self.camera_server.serve_forever(),
+            self.text_server.serve_forever(),
+        )
+
+    async def start(self):
         '''
         start the ConferenceServer and necessary running tasks to handle clients in this conference
         '''
-        asyncio.run(self.build())
+        await self.build()
 
 
 """
@@ -150,6 +164,7 @@ class MainServer:
         # 每个键值对包含一个会议ID和对应的 ConferenceServer 实例
         self.conference_manager = {}  # 管理创建会议的客户端
         self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
+        self.manage_task = {}
 
     async def handle_creat_conference(self, writer, reader, title):
         """
@@ -161,9 +176,10 @@ class MainServer:
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
         print("test1")
-        new_conference.start()
+        task = asyncio.create_task(new_conference.start())
+        self.manage_task[conference_id] = task
         print("test2")
-        writer.write(f'SUCCESS: conference_id:{conference_id}'.encode())  # 返回会议号
+        writer.write(f'SUCCESS {conference_id}'.encode())  # 返回会议号
         print("test3")
         await writer.drain()
 
@@ -186,7 +202,7 @@ class MainServer:
             writer.write('Fail: Conference not found'.encode())
             await writer.drain()
 
-    async def handle_quit_conference(self, writer, reader, message):
+    async def handle_quit_conference(self, reader, writer, message):
         """
         quit conference (in-meeting request & or no need to request)
         """
@@ -207,6 +223,8 @@ class MainServer:
         """
         if self.conference_manager[conference_id] == (writer, reader):  # 确认该用户是否有管理权限
             self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
+            task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
+            task.cancel()  # Cancel the task
             self.conference_manager.pop((writer, reader))
             for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
                 self.clients_info.pop((w, r))
@@ -236,7 +254,7 @@ class MainServer:
 
                     if opera.startswith('Create'):
                         title = message.split(' ')[-2]
-                        await self.handle_creat_conference(reader, writer, title)
+                        await self.handle_creat_conference(writer, reader, title)
                     elif opera.startswith('JOIN'):
                         conference_id = message.split()[2]
                         await self.handle_join_conference(reader, writer, conference_id, message)
