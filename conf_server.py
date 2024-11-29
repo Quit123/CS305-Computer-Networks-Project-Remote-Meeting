@@ -124,7 +124,7 @@ class ConferenceServer:
         '''
         start the ConferenceServer and necessary running tasks to handle clients in this conference
         '''
-        asyncio.run(self.build(self))
+        asyncio.run(self.build())
 
 
 """
@@ -160,8 +160,11 @@ class MainServer:
         new_conference = ConferenceServer(conference_id,title)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
+        print("test1")
         new_conference.start()
-        writer.write(f'Success: conference_id:{conference_id}'.encode())  # 返回会议号
+        print("test2")
+        writer.write(f'SUCCESS: conference_id:{conference_id}'.encode())  # 返回会议号
+        print("test3")
         await writer.drain()
 
     async def handle_join_conference(self, reader, writer, conference_id, message):
@@ -230,8 +233,9 @@ class MainServer:
                 if message.startswith('[COMMAND]:'):
                     print('here:'+message)
                     opera = message.split(' ')[1]
-                    if opera.startswith('CREATE'):
-                        title = message.split(' ')[2]
+
+                    if opera.startswith('Create'):
+                        title = message.split(' ')[-2]
                         await self.handle_creat_conference(reader, writer, title)
                     elif opera.startswith('JOIN'):
                         conference_id = message.split()[2]
