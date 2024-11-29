@@ -7,9 +7,6 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-
-
-
 # 用于存储登录状态
 login_info = {
     "status": False
@@ -80,6 +77,7 @@ async def Create():
     # create = True
     data = request.json
     title = data.get('title')
+    title = title + " " + client_instance.user_name
     ans = await client_instance.create_conference(title)
     if "Success" in ans:
         return jsonify({'status': 'success', 'message': ans})
@@ -93,9 +91,15 @@ def Join():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     con_id = request.json
+    con_id = con_id + " " + client_instance.user_name
     ans = client_instance.join_conference(con_id)
     # if username in users and users[username] == password:
-    if "Success" in ans:
+    error = 0
+    while not client_instance.on_meeting:
+        if "Error" in ans:
+            error = 1
+            break
+    if error == 0:
         return jsonify({'status': 'success', 'message': ans})
     else:
         return jsonify({'status': 'fail', 'message': ans})

@@ -16,6 +16,7 @@ async def establish_connect(self):
     try:
         for type in self.support_data_types:
             port = self.ports.get(type)
+            print("port:", port)
             reader, writer = await asyncio.open_connection(self.server_addr[0], port)  # Add await here
             self.sockets[type] = (reader, writer)
         print(f"[Info]: Connected to '{self.server_addr}' server.")
