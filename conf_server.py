@@ -230,11 +230,11 @@ class MainServer:
                 print(f'{client_address}:{message}')
                 if message.startswith('[COMMAND]:'):
                     print('here:'+message)
-                    opera = message.split('[COMMAND]:')[1]
+                    opera = message.split(' ')[1]
                     if opera.startswith('CREATE'):
                         await self.handle_creat_conference(reader, writer)
                     elif opera.startswith('JOIN'):
-                        conference_id = message.split()[1]
+                        conference_id = message.split()[2]
                         await self.handle_join_conference(reader, writer, conference_id, message)
                     elif opera.startswith('QUIT'):
                         await self.handle_quit_conference(reader, writer, message)
