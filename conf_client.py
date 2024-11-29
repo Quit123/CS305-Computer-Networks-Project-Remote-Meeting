@@ -17,7 +17,8 @@ class ConferenceClient:
         self.host = host
         self.user_name = None
         self.log_status = False
-        self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
+        self.support_data_types = ['text']
+        #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
         self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
@@ -44,47 +45,52 @@ class ConferenceClient:
         self.join_event = asyncio.Event()
         self.established_client = None
 
-    async def create_conference(self, name):
+    async def create_conference(self, title_name):
         """
         create a conference: send create-conference request to server and obtain necessary data to
         receive conference id.
         """
         print("[Info]: Creating a new conference...")
-        request_data = f"[COMMAND]: Create Conference {name}"
-        await self.start_conference()
-        response = asyncio.run(self.send_request(request_data))
+        request_data = f"[COMMAND]: Create Conference {title_name}"
+        # 这里用来讲建立交流链接，text，和命令交流
+        print("test1")
+        response = await self.send_request(request_data)
+        print("test2")
         if "SUCCESS" in response:
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
             self.on_meeting = True
-            await self.keep_share()
+            await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
-            return f"[Success]: Conference created with ID {self.conference_id}"
+            await self.keep_share()
+            print(f"share cut down or quit meeting: {self.on_meeting}")
+            #return f"[Success]: Conference created with ID {self.conference_id}"
         else:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
 
-    def join_conference(self, conference_id):
+    async def join_conference(self, conference_id):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
-        self.start_conference()
+        # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
-        response = asyncio.run(self.send_request(request_data))
+        response = await self.send_request(request_data)
         if "SUCCESS" in response:
             self.conference_id = conference_id
-
             self.on_meeting = True
-            self.keep_share()
+            await self.start_conference()
             print(f"[Success]: Joined conference {self.conference_id}")
-            return f"[Success]: CJoined conference {self.conference_id}"
+            await self.keep_share()
+            print(f"share cut down or quit meeting: {self.on_meeting}")
+            # return f"[Success]: CJoined conference {self.conference_id}"
         else:
             print(f"[Error]: Failed to join conference: {response}")
             return f"[Error]: Failed to join conference: {response}"
 
-    def quit_conference(self):
+    async def quit_conference(self):
         """
         quit your ongoing conference
         """
@@ -92,8 +98,8 @@ class ConferenceClient:
             print("[Warn]: Not currently in any meeting.")
             return
         print("[Info]: Quitting conference...")
-        request_data = f"[COMMAND]: QUIT ID {self.conference_id}"
-        response = asyncio.run(self.send_request(request_data))
+        request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
+        response = await self.send_request(request_data)
         if "SUCCESS" in response:
             self.close_conference()
             self.on_meeting = False
@@ -102,13 +108,13 @@ class ConferenceClient:
         else:
             print(f"[Error]: Failed to quit conference: {response}")
 
-    def cancel_conference(self):
+    async def cancel_conference(self):
         """
         cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
         print("[Info]: Cancelling conference...")
-        request_data = f"[COMMAND]: CANCEL id {self.conference_id}"
-        response = asyncio.run(self.send_request(request_data))
+        request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
+        response = await self.send_request(request_data)
         if response.startswith("SUCCESS"):
             self.close_conference()
             self.on_meeting = False
@@ -142,11 +148,13 @@ class ConferenceClient:
         Send a request to the main server and receive the response.
         """
         try:
-            reader, writer = self.sockets['text']
-            writer.write(request_data.encode())
-            await writer.drain()
-            response = await reader.read(1024)
-            return response.decode()
+            self.established_client.send(request_data.encode())
+            #writer.write(request_data.encode())
+            #await writer.drain()
+            response = server_response(self.established_client, None).decode("utf-8")
+            #response = await reader.read(1024)
+            print("test1")
+            return response
         except Exception as e:
             print(f"[Error]: Failed to send request: {e}")
             return None
