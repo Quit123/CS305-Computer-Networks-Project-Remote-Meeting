@@ -152,13 +152,13 @@ class MainServer:
         self.conference_manager = {}  # 管理创建会议的客户端
         self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
 
-    async def handle_creat_conference(self, writer, reader):
+    async def handle_creat_conference(self, writer, reader, title):
         """
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
 
         """
         conference_id = str(uuid.uuid4())  # 会议唯一标识
-        new_conference = ConferenceServer(conference_id)  # 创建新会议服务器
+        new_conference = ConferenceServer(conference_id,title)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
         new_conference.start()
@@ -232,7 +232,8 @@ class MainServer:
                     print('here:'+message)
                     opera = message.split(' ')[1]
                     if opera.startswith('CREATE'):
-                        await self.handle_creat_conference(reader, writer)
+                        title = message.split(' ')[2]
+                        await self.handle_creat_conference(reader, writer, title)
                     elif opera.startswith('JOIN'):
                         conference_id = message.split()[2]
                         await self.handle_join_conference(reader, writer, conference_id, message)
