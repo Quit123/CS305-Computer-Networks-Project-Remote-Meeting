@@ -161,11 +161,25 @@ export default {
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
-    joinMeeting() {
-      // 模拟加入会议
-      message.success("加入会议成功！");
-      this.resetJoinForm();
-      this.$router.push('/meeting' );
+    async joinMeeting() {
+      if (!this.joinMeetingId) {
+        return message.error("请输入会议号！");
+      }
+
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/join', {
+          con_id: this.joinMeetingId,
+        });
+        if (response.data.status === 'success') {
+          message.success("加入会议成功！");
+          this.resetJoinForm();
+          this.$router.push('/meeting');
+        } else {
+          message.error("加入会议失败：" + response.data.message);
+        }
+      } catch (error) {
+        message.error("加入会议失败：" + error.message);
+      }
     },
     resetJoinForm() {
       this.joinMeetingId = "";

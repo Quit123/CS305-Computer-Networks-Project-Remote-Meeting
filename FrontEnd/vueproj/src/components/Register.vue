@@ -68,7 +68,7 @@ export default {
           password: this.password,
         });
         console.log('注册成功:', response.data);
-        this.$router.push('/login');
+        this.$router.push('/');
       } catch (error) {
         console.error('注册失败:', error);
         alert('注册失败，请检查您的信息。');
