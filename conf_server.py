@@ -155,13 +155,14 @@ class MainServer:
     async def handle_creat_conference(self, writer, reader):
         """
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
+
         """
         conference_id = str(uuid.uuid4())  # 会议唯一标识
         new_conference = ConferenceServer(conference_id)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
         new_conference.start()
-        writer.write(f'Conference Created: {conference_id}'.encode())  # 返回会议号
+        writer.write(f'Success: conference_id:{conference_id}'.encode())  # 返回会议号
         await writer.drain()
 
     async def handle_join_conference(self, reader, writer, conference_id, message):
@@ -171,16 +172,16 @@ class MainServer:
         if conference_id in self.conference_servers:  # 如果可以通过会议id找到会议
             if (writer, reader)in self.clients_info:  #
                 cid = self.clients_info[(writer, reader)]
-                writer.write(f'You have already joined the conference {cid}'.encode())
+                writer.write(f'Fail:You have already joined the conference {cid}'.encode())
                 await writer.drain()
             else:
                 conference = self.conference_servers[conference_id]
                 conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
                 self.clients_info[(writer, reader)] = conference_id  # 标识每个客户端加入的会议
-                writer.write(f'Joined Conference: {conference_id}'.encode())
+                writer.write(f'Success: Joined Conference {conference_id}'.encode())
                 await writer.drain()
         else:
-            writer.write('Conference not found'.encode())
+            writer.write('Fail: Conference not found'.encode())
             await writer.drain()
 
     async def handle_quit_conference(self, writer, reader, message):
@@ -191,10 +192,10 @@ class MainServer:
             cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
             self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
             self.clients_info.pop((writer, reader))  # 该用户未加入会议
-            writer.write(f'Quit Conference: {cid}'.encode())
+            writer.write(f'Success: Quit Conference: {cid}'.encode())
             await writer.drain()
         else:
-            writer.write('You do not have a meeting now'.encode())
+            writer.write('Fail: You do not have a meeting now'.encode())
             await writer.drain()
         pass
 
@@ -208,10 +209,10 @@ class MainServer:
             for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
                 self.clients_info.pop((w, r))
             self.conference_servers.pop(conference_id)  # 删除该会议
-            writer.write(f'Cancel Conference: {conference_id}'.encode())
+            writer.write(f'Success: Cancel Conference: {conference_id}'.encode())
             await writer.drain()
         else:
-            writer.write('Permission deny'.encode())
+            writer.write('Fail: Permission deny'.encode())
             await writer.drain()
 
     async def request_handler(self, reader, writer):
