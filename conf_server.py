@@ -7,12 +7,12 @@ from log_register_func import *
 users = load_users(user_inf_txt)
 print(users)
 class ConferenceServer:
-    def __init__(self, conference_id):
+    def __init__(self, conference_id, title):
         # async server
         self.conference_id = conference_id  # conference_id for distinguish difference conference
-        self.conf_serve_ports = 8005
-        self.data_serve_ports = [8001, 8002, 8003, 8004]
-        self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
+        self.title = title
+        self.data_serve_ports = [8001,8002,8003,8004]
+        self.data_types = ['audio','screen', 'camera','text']  # example data types in a video conference
         self.user_name = []
         self.client_conns = []
         self.servers = []
@@ -35,19 +35,19 @@ class ConferenceServer:
         writer.close()
         await writer.wait_closed()
 
-    async def handle_client(self, reader:StreamReader, writer:StreamWriter, message, user_name):
+    async def handle_client(self, reader:StreamReader, writer:StreamWriter, message):
         """
         running task: handle the in-meeting requests or messages from clients
         """
         message = message.decode()
-        parts = message.strip().spilt()
+        parts = message.strip().spilt(" ")
         if(parts[1]=="JOIN"):
             if(writer not in self.client_conns):
                 self.client_conns.append(writer)
-                self.user_name.append(user_name)
+                self.user_name.append(parts[-1])
                 self.online_users+=1
-                self.last_join_user = user_name
-                writer.write("SUCCESS join confernece".encode())
+                self.last_join_user = parts[-1]
+                writer.write(f"SUCCESS join confernece {self.title}".encode())
                 await writer.drain()
             else:
                 writer.write("FAILURE wrong user".encode())
@@ -55,8 +55,9 @@ class ConferenceServer:
         elif(parts[1]=="QUIT"):
             if(writer in self.client_conns):
                 self.client_conns.remove(writer)
-                self.user_name.remove(user_name)
+                self.user_name.remove(parts[-1])
                 self.last_online_users-=1
+                self.online_users-=1
                 writer.write("SUCCESS quit confernece".encode())
                 await writer.drain()
             else:
@@ -74,7 +75,7 @@ class ConferenceServer:
         print(f"connection from {ip}:{port}")
         while self.run:
             message = await reader.read(1024).decode()
-            parts = message.strip().spilt()
+            parts = message.strip().spilt(" ")
             if(parts[0].startwith('[ASK]')):
                 if(self.online_users>self.last_online_users):
                     writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
@@ -107,7 +108,6 @@ class ConferenceServer:
         self.client_conns.clear()
 
     async def build(self):
-        server = await asyncio.start_server(lambda r, w:self._handle_client(r,w,server), '127.0.0.1', 8005)
         audio_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8001)
         screen_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8002)
         camera_server = await asyncio.start_server(lambda r, w:self.handle_data(r,w,server), '127.0.0.1', 8003)
@@ -118,8 +118,7 @@ class ConferenceServer:
         self.servers.append(camera_server)
         self.servers.append(text_server)
         async with server, audio_server, screen_server, camera_server, text_server:
-            await asyncio.gather(server.serve_forever(), audio_server.serve_forever(), 
-                                 screen_server.serve_forever(), camera_server.serve_forever(), text_server.serve_forever())
+            await asyncio.gather(audio_server.serve_forever(), screen_server.serve_forever(), camera_server.serve_forever(), text_server.serve_forever())
 
     def start(self):
         '''
