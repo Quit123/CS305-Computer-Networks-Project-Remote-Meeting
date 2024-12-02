@@ -15,6 +15,40 @@ from aiortc import VideoStreamTrack, RTCPeerConnection
 # audio setting
 FORMAT = pyaudio.paInt16
 audio = pyaudio.PyAudio()
+
+from flask import Flask
+from flask_socketio import SocketIO, emit
+import wave
+import pyaudio
+
+app = Flask(__name__)
+socketio = SocketIO(app)
+
+# # 假设你使用 pyaudio 来捕获音频数据并实时发送
+# def stream_audio_data():
+#     p = pyaudio.PyAudio()
+#     stream = p.open(format=pyaudio.paInt16,
+#                     channels=1,
+#                     rate=16000,
+#                     input=True,
+#                     frames_per_buffer=1024)
+#     while True:
+#         data = stream.read(1024)  # 读取音频数据
+#         emit('audio_data', data, broadcast=True)  # 将音频数据发送到所有客户端
+#
+# @app.route('/')
+# def index():
+#     return "Audio Streaming Server"
+#
+# # 启动音频数据流
+# @socketio.on('start_stream')
+# def handle_start_stream():
+#     stream_audio_data()
+#
+# if __name__ == '__main__':
+#     socketio.run(app)
+
+
 streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
 

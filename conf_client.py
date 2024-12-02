@@ -1,5 +1,6 @@
 import asyncio
 import util
+import time
 from conf_opt import *
 from util import *
 from config import *
@@ -7,6 +8,7 @@ from flask import Flask, request, jsonify
 import asyncio
 from log_register_func import *
 import api
+import threading
 
 established_client = None
 
@@ -28,11 +30,12 @@ class ConferenceClient:
         self.data_queues = {
             'screen': asyncio.Queue(),
             'camera': asyncio.Queue(),
-            'audio': {},  # 将 'audio' 初始化为空字典
+            'audio': asyncio.Queue(),  # 将 'audio' 初始化为空字典
             'text': asyncio.Queue()
         }
         self.text = None
         self.text_event = asyncio.Event()  # 用于通知 send_texts 有新数据
+        self.loop = asyncio.get_event_loop()
         self.server_addr = (SERVER_IP, MAIN_SERVER_PORT)  # server addr
         self.conference_id = None
         self.is_working = True
@@ -60,9 +63,9 @@ class ConferenceClient:
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
             self.on_meeting = True
-            await self.start_conference()
+            # await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
-            await self.keep_share()
+            # await self.keep_share()
             print(f"share cut down or quit meeting: {self.on_meeting}")
             #return f"[Success]: Conference created with ID {self.conference_id}"
         else:
@@ -168,12 +171,23 @@ class ConferenceClient:
         # receive_data,每种写一个
         # output_data
         # send_data
+        # await asyncio.gather(receive_text(self),
+        #                      receive_audio(self),
+        #                      receive_camera(self),
+        #                      output_data(self, fps_or_frequency),
+        #                      send_datas(self),
+        #                      ask_new_clients_and_share_screen(self))
+        # send_thread = threading.Thread(target=send_audio)
+        # receive_thread = threading.Thread(target=receive_audio)
+        # send_thread.start()
+        # receive_thread.start()
+        # send_thread.join()
+        # receive_thread.join()
         await asyncio.gather(receive_text(self),
-                             receive_audio(self),
-                             receive_camera(self),
+                             self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+                             self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
                              output_data(self, fps_or_frequency),
-                             send_datas(self),
-                             ask_new_clients_and_share_screen(self))
+                             send_datas(self))
 
     def share_switch(self, data_type):
         """

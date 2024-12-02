@@ -111,10 +111,10 @@ class ConferenceServer:
         # 启动不同数据类型的服务器
         print("testb1")
         self.audio_server, self.screen_server, self.camera_server, self.text_server = (
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8001),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8002),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8003),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8004),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8001),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8002),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8004),
         )
         print("testb2")
         # 将服务器引用保存在列表中
