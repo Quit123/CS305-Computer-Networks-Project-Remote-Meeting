@@ -66,8 +66,8 @@ class ConferenceClient:
             # await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
             # await self.keep_share()
-            print(f"share cut down or quit meeting: {self.on_meeting}")
-            #return f"[Success]: Conference created with ID {self.conference_id}"
+            # print(f"share cut down or quit meeting: {self.on_meeting}")
+            return f"[Success]: Conference created with ID {self.conference_id}", self.conference_id
         else:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
@@ -81,7 +81,7 @@ class ConferenceClient:
         # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = await self.send_request(request_data)
-        if "SUCCESS" in response:
+        if "Success" in response:
             self.conference_id = conference_id
             self.on_meeting = True
             await self.start_conference()

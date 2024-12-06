@@ -23,6 +23,10 @@ async def establish_connect(self):
                 established_client, info = connection_establish((self.server_addr[0], port))
                 self.sockets[type] = established_client
             if type == 'audio':
+                # 尝试UDP
+                # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 使用 UDP 协议
+                # self.sockets[type] = sock
+                # TCP
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((self.server_addr[0], port))
                 self.sockets[type] = sock

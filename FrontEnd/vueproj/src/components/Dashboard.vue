@@ -143,6 +143,7 @@ export default {
         });
         if (response.data.status === 'success') {
           message.success("会议创建成功！");
+          this.joinMeetingId = response.data.message;
           this.resetForm();
           this.joinMeeting();
         } else {
@@ -162,10 +163,19 @@ export default {
       this.isJoinMeetingVisible = true;
     },
     joinMeeting() {
-      // 模拟加入会议
-      message.success("加入会议成功！");
-      this.resetJoinForm();
-      this.$router.push('/meeting' );
+      try {
+        axios.post('http://127.0.0.1:5000/api/join', {
+          con_id: this.joinMeetingId,
+        });
+        console.log("pass")
+        setTimeout(() => {
+          message.success("加入会议成功")
+          this.$router.push('/meeting');
+        }, 1000);
+        console.log("good pass")
+      } catch (error) {
+        message.error("会议加入失败" + error.message);
+      }
     },
     resetJoinForm() {
       this.joinMeetingId = "";

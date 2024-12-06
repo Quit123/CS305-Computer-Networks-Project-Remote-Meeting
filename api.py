@@ -81,13 +81,14 @@ async def Create():
     data = request.json
     title = data.get('title')
     title = title + " " + client_instance.user_name
-    ans = await client_instance.create_conference(title)
+    ans, con_id = await client_instance.create_conference(title)
     error = 0
     if "Error" in ans:
         error = 1
     print("pass")
     if error == 0:
-        return jsonify({'status': 'success', 'message': ans})
+        print(jsonify({'status': 'success', 'message': con_id}))
+        return jsonify({'status': 'success', 'message': con_id})
     else:
         return jsonify({'status': 'fail', 'message': ans})
 
@@ -97,7 +98,9 @@ async def Join():
     print("click Join")
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
-    con_id = request.json
+    con_in = request.json
+    con_id = con_in['con_id']
+    print(con_id)
     con_id = con_id + " " + client_instance.user_name
     await client_instance.join_conference(con_id)
     # if username in users and users[username] == password:
