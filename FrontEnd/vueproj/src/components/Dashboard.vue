@@ -2,8 +2,7 @@
   <div class="dashboard">
     <!-- 用户信息 -->
     <div class="user-info">
-      <img class="avatar" :src="user.avatar" alt="用户头像" />
-      <h2>欢迎回来, {{ user.name }}!</h2>
+      <h2>欢迎回来, {{ user_id }}!</h2>
       <p>今天是 {{ currentDate }}</p>
     </div>
 
@@ -96,8 +95,12 @@
 import {message} from "ant-design-vue";
 import 'ant-design-vue/es/message/style/css'
 import axios from "axios";
+import {mapGetters} from "vuex";
 
 export default {
+  computed: {
+    ...mapGetters(['getUsername']),
+  },
   data() {
     return {
       isCreateMeetingVisible: false,
@@ -106,10 +109,7 @@ export default {
       meeting: {
         title: "",
       },
-      user: {
-        name: '张三',
-        avatar: 'https://via.placeholder.com/100',
-      },
+      user_id: this.getUsername,
       currentDate: new Date().toLocaleDateString(),
     };
   },
@@ -144,7 +144,7 @@ export default {
         if (response.data.status === 'success') {
           message.success("会议创建成功！");
           this.resetForm();
-          this.joinMeeting();
+          await this.joinMeeting();
         } else {
           message.error("会议创建失败：" + response.data.message);
         }
@@ -170,12 +170,12 @@ export default {
         const response = await axios.post('http://127.0.0.1:5000/api/join', {
           con_id: this.joinMeetingId,
         });
-        if (response.data.status === 'success') {
+        if (response.data.status === 'failure') {
+          message.error("加入会议失败：" + response.data.message);
+        } else {
           message.success("加入会议成功！");
           this.resetJoinForm();
           this.$router.push('/meeting');
-        } else {
-          message.error("加入会议失败：" + response.data.message);
         }
       } catch (error) {
         message.error("加入会议失败：" + error.message);
@@ -194,12 +194,6 @@ export default {
 .user-info {
   text-align: center;
   margin-bottom: 24px;
-}
-.user-info .avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  margin-bottom: 16px;
 }
 
 /* 动态卡片样式 */
@@ -222,15 +216,5 @@ export default {
 
 .dashboard-grid {
   margin-bottom: 24px;
-}
-
-/* 额外样式 */
-.dashboard-extra {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-.dashboard-calendar {
-  flex: 1;
 }
 </style>
