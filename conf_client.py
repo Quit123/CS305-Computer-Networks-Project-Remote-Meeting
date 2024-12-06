@@ -168,27 +168,17 @@ class ConferenceClient:
         running task: keep sharing (capture and send) certain type of data from server or clients (P2P)
         you can create different functions for sharing various kinds of data
         """
-        # 启动任务并立即返回
-        # receive_data,每种写一个
-        # output_data
-        # send_data
-        # await asyncio.gather(receive_text(self),
-        #                      receive_audio(self),
-        #                      receive_camera(self),
-        #                      output_data(self, fps_or_frequency),
-        #                      send_datas(self),
-        #                      ask_new_clients_and_share_screen(self))
-        # send_thread = threading.Thread(target=send_audio)
-        # receive_thread = threading.Thread(target=receive_audio)
-        # send_thread.start()
-        # receive_thread.start()
-        # send_thread.join()
-        # receive_thread.join()
-        await asyncio.gather(receive_text(self),
-                             self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
-                             self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
-                             output_data(self, fps_or_frequency),
-                             send_datas(self))
+        # task_receive_text = asyncio.create_task(receive_text(self))
+        # task_output = asyncio.create_task(output_data(self, fps_or_frequency))
+        # task_send_text = asyncio.create_task(send_texts(self))
+        self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+        self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        print("good")
+        #while(self.on_meeting):
+        while self.on_meeting:
+            await asyncio.gather(# receive_text(self),
+                                 # output_data(self, fps_or_frequency),
+                                 send_texts(self))
 
     def share_switch(self, data_type):
         """

@@ -145,7 +145,7 @@ export default {
           message.success("会议创建成功！");
           this.joinMeetingId = response.data.message;
           this.resetForm();
-          await this.joinMeeting();
+          this.joinMeeting();
         } else {
           message.error("会议创建失败：" + response.data.message);
         }
@@ -162,12 +162,12 @@ export default {
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
-    async joinMeeting() {
+    joinMeeting() {
       if (!this.joinMeetingId) {
         return message.error("请输入会议号！");
       }
       try {
-        await axios.post('http://127.0.0.1:5000/api/join', {
+        axios.post('http://127.0.0.1:5000/api/join', {
           con_id: this.joinMeetingId,
         });
         this.resetJoinForm();

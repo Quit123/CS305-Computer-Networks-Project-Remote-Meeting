@@ -61,7 +61,7 @@ export default {
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { user: 'You', text: this.newMessage });
+        this.socket.emit('message', { text: this.newMessage });
         this.newMessage = '';
       }
     },

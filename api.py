@@ -153,23 +153,38 @@ def update_camera_status():
     return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['camera']})
 
 
-socketio.on('message')
-def front_text(msg):
-    print('Message: ' + msg)
+@socketio.on('message')
+def send_text(msg):
+    # 自己发送的信息要传用户名
+    # server发送的信息需要特殊标识一下
     send(msg, broadcast=True)
-    #client_instance = app.config.get('CLIENT_INSTANCE')
-
-
-@app.route('/api/send', methods=['POST'])
-def send_text():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求发送文本消息"""
-    data = request.json
-    if 'message' in data:
-        client_instance.text = data['message']
+    if 'message' in msg:
+        client_instance.text = msg['message']
+        print("client_instance.text:", client_instance.text)
         client_instance.text_event.set()
         return jsonify({'status': 'success', 'message': client_instance.text})
     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
+    #client_instance = app.config.get('CLIENT_INSTANCE')
+
+
+@socketio.on('message')
+def rev_text(msg):
+    send(msg, broadcast=True)
+    return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
+
+
+# @app.route('/api/send', methods=['POST'])
+# def send_text():
+#     client_instance = app.config.get('CLIENT_INSTANCE')
+#     """前端通过 POST 请求发送文本消息"""
+#     data = request.json
+#     if 'message' in data:
+#         client_instance.text = data['message']
+#         client_instance.text_event.set()
+#         return jsonify({'status': 'success', 'message': client_instance.text})
+#     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
 
 
 @app.route('/api/box-size', methods=['POST'])
