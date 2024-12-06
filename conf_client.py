@@ -59,6 +59,7 @@ class ConferenceClient:
         print("test1")
         response = await self.send_request(request_data)
         print("test2")
+        print("response:", response)
         if "SUCCESS" in response:
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]

@@ -2,8 +2,7 @@
   <div class="dashboard">
     <!-- 用户信息 -->
     <div class="user-info">
-      <img class="avatar" :src="user.avatar" alt="用户头像" />
-      <h2>欢迎回来, {{ user.name }}!</h2>
+      <h2>欢迎回来, {{ user_id }}!</h2>
       <p>今天是 {{ currentDate }}</p>
     </div>
 
@@ -96,8 +95,12 @@
 import {message} from "ant-design-vue";
 import 'ant-design-vue/es/message/style/css'
 import axios from "axios";
+import {mapGetters} from "vuex";
 
 export default {
+  computed: {
+    ...mapGetters(['getUsername']),
+  },
   data() {
     return {
       isCreateMeetingVisible: false,
@@ -106,10 +109,7 @@ export default {
       meeting: {
         title: "",
       },
-      user: {
-        name: '张三',
-        avatar: 'https://via.placeholder.com/100',
-      },
+      user_id: this.getUsername,
       currentDate: new Date().toLocaleDateString(),
     };
   },
@@ -145,7 +145,7 @@ export default {
           message.success("会议创建成功！");
           this.joinMeetingId = response.data.message;
           this.resetForm();
-          this.joinMeeting();
+          await this.joinMeeting();
         } else {
           message.error("会议创建失败：" + response.data.message);
         }
@@ -162,19 +162,21 @@ export default {
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
-    joinMeeting() {
+    async joinMeeting() {
+      if (!this.joinMeetingId) {
+        return message.error("请输入会议号！");
+      }
       try {
-        axios.post('http://127.0.0.1:5000/api/join', {
+        await axios.post('http://127.0.0.1:5000/api/join', {
           con_id: this.joinMeetingId,
         });
-        console.log("pass")
+        this.resetJoinForm();
         setTimeout(() => {
-          message.success("加入会议成功")
+          message.success("加入会议成功！");
           this.$router.push('/meeting');
         }, 1000);
-        console.log("good pass")
       } catch (error) {
-        message.error("会议加入失败" + error.message);
+        message.error("加入会议失败：" + error.message);
       }
     },
     resetJoinForm() {
@@ -190,12 +192,6 @@ export default {
 .user-info {
   text-align: center;
   margin-bottom: 24px;
-}
-.user-info .avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  margin-bottom: 16px;
 }
 
 /* 动态卡片样式 */
@@ -218,15 +214,5 @@ export default {
 
 .dashboard-grid {
   margin-bottom: 24px;
-}
-
-/* 额外样式 */
-.dashboard-extra {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-.dashboard-calendar {
-  flex: 1;
 }
 </style>

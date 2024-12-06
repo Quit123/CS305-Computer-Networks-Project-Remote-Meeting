@@ -6,13 +6,9 @@
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
         <div class="video-grid">
-          <div v-for="(video, index) in paginatedVideos" :key="index" class="video-container">
-            <video :src="video.src" autoplay></video>
+          <div v-for="(video, index) in videos" :key="index" class="video-container">
+            <video :ref="'video_' + video.user_id" autoplay></video>
           </div>
-        </div>
-        <div class="video-pagination">
-          <a-button @click="prevPage" :disabled="currentPage === 1">Previous</a-button>
-          <a-button @click="nextPage" :disabled="currentPage === totalPages">Next</a-button>
         </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
@@ -38,7 +34,8 @@
 </template>
 
 <script>
-import {Layout, Button, Input, Switch} from 'ant-design-vue';
+import { Layout, Button, Input, Switch } from 'ant-design-vue';
+import io from 'socket.io-client';
 
 export default {
   components: {
@@ -53,43 +50,18 @@ export default {
   data() {
     return {
       tittle: 'SUSTeh CS303 Online Meeting App',
-      videos: [
-        {src: 'video1.mp4'},
-        {src: 'video2.mp4'},
-        {src: 'video3.mp4'},
-        {src: 'video4.mp4'},
-        {src: 'video5.mp4'},
-      ],
-      currentPage: 1,
       messages: [],
       newMessage: '',
       cameraOn: true,
       microphoneOn: true,
+      socket: null,
+      videos: [],
     };
   },
-  computed: {
-    paginatedVideos() {
-      const start = (this.currentPage - 1) * 4;
-      return this.videos.slice(start, start + 4);
-    },
-    totalPages() {
-      return Math.ceil(this.videos.length / 4);
-    },
-  },
   methods: {
-    prevPage() {
-      if (this.currentPage > 1) {
-        this.currentPage--;
-      }
-    },
-    nextPage() {
-      if (this.currentPage < this.totalPages) {
-        this.currentPage++;
-      }
-    },
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.messages.push({user: 'You', text: this.newMessage});
+        this.socket.emit('message', { user: 'You', text: this.newMessage });
         this.newMessage = '';
       }
     },
@@ -102,6 +74,32 @@ export default {
     exitMeeting() {
       console.log('Exiting meeting');
     },
+    connectToSocket() {
+      this.socket = io('http://127.0.0.1:5000');
+      this.socket.on('connect', () => {
+        console.log('WebSocket connected');
+        this.socket.emit('video_stream', { user_id: 'your_user_id' });
+      });
+      this.socket.on('video_frame', (data) => {
+        const videoElement = this.$refs['video_' + data.user_id];
+        if (videoElement) {
+          videoElement.src = URL.createObjectURL(new Blob([data.frame], { type: 'image/jpeg' }));
+        } else {
+          this.videos.push({ user_id: data.user_id });
+        }
+      });
+      this.socket.on('message', (msg) => {
+        this.messages.push(msg);
+      });
+    },
+  },
+  mounted() {
+    this.connectToSocket();
+  },
+  beforeDestroy() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   },
 };
 </script>

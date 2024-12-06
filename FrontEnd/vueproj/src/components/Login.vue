@@ -10,11 +10,11 @@
             @submit.prevent="handleLogin"
         >
           <!-- 输入账号 -->
-          <a-form-item label="邮箱">
+          <a-form-item label="用户名">
             <a-input
                 v-model:value="username"
                 size="large"
-                placeholder="请输入邮箱"
+                placeholder="请输入用户名"
                 class="custom-input"
             />
           </a-form-item>
@@ -52,6 +52,7 @@
 
 <script>
 import axios from "axios";
+import { mapActions } from 'vuex';
 
 export default {
   data() {
@@ -61,14 +62,21 @@ export default {
     };
   },
   methods: {
+    ...mapActions(['updateUsername']),
     async handleLogin() {
       try {
-        const response = await axios.post('http://127.0.0.1:5000/api/login' ,{
+        const response = await axios.post('http://127.0.0.1:5000/api/login', {
           username: this.username,
           password: this.password,
         });
-        console.log('登录成功:', response.data);
-        this.$router.push('/dashboard');
+        if (response.data.status === 'success') {
+          console.log('登录成功:', response.data);
+          await this.updateUsername(this.username);
+          this.$router.push('/dashboard');
+        } else {
+          console.error('登录失败:', response.data);
+          alert('登录失败，请检查您的用户名和密码。');
+        }
       } catch (error) {
         console.error('登录失败:', error);
         alert('登录失败，请检查您的用户名和密码。');
