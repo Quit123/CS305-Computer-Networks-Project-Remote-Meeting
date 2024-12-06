@@ -1,6 +1,7 @@
 import asyncio
 from util import *
-import uuid
+import random
+import string
 from asyncio import StreamReader, StreamWriter
 from log_register_func import *
 
@@ -162,7 +163,9 @@ class MainServer:
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
 
         """
-        conference_id = str(uuid.uuid4())  # 会议唯一标识
+        characters = string.ascii_letters + string.digits
+        # 生成随机密码
+        conference_id = ''.join(random.choice(characters) for i in range(6))  # 会议唯一标识
         new_conference = ConferenceServer(conference_id,title)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
