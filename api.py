@@ -1,10 +1,13 @@
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO, send
 import asyncio
 import util
 from log_register_func import *
 from flask_cors import CORS
 
 app = Flask(__name__)
+# app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
 
 # 用于存储登录状态
@@ -79,30 +82,34 @@ async def Create():
     title = data.get('title')
     title = title + " " + client_instance.user_name
     ans = await client_instance.create_conference(title)
-    if "Success" in ans:
+    error = 0
+    if "Error" in ans:
+        error = 1
+    print("pass")
+    if error == 0:
         return jsonify({'status': 'success', 'message': ans})
     else:
         return jsonify({'status': 'fail', 'message': ans})
 
 
 @app.route('/api/join', methods=['POST'])
-def Join():
+async def Join():
     print("click Join")
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     con_id = request.json
     con_id = con_id + " " + client_instance.user_name
-    ans = client_instance.join_conference(con_id)
+    await client_instance.join_conference(con_id)
     # if username in users and users[username] == password:
-    error = 0
-    while not client_instance.on_meeting:
-        if "Error" in ans:
-            error = 1
-            break
-    if error == 0:
-        return jsonify({'status': 'success', 'message': ans})
-    else:
-        return jsonify({'status': 'fail', 'message': ans})
+    # error = 0
+    # while not client_instance.on_meeting:
+    #     if "Error" in ans:
+    #         error = 1
+    #         break
+    # if error == 0:
+    #     return jsonify({'status': 'success', 'message': ans})
+    # else:
+    #     return jsonify({'status': 'fail', 'message': ans})
 
 
 @app.route('/api/quit', methods=['POST'])
@@ -127,7 +134,7 @@ def Cancel():
     return jsonify({'status': 'success', 'message': 'Click cancel return'})
 
 
-@app.route('/update-audio-status', methods=['POST'])
+@app.route('/api/update-audio-status', methods=['POST'])
 def update_audio_status():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求更新 text 状态"""
@@ -135,7 +142,7 @@ def update_audio_status():
     return jsonify({'status': 'success', 'audio_status': client_instance.acting_data_types['audio']})
 
 
-@app.route('/update-camera-status', methods=['POST'])
+@app.route('/api/update-camera-status', methods=['POST'])
 def update_camera_status():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求更新 camera 状态"""
@@ -143,7 +150,14 @@ def update_camera_status():
     return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['camera']})
 
 
-@app.route('/send-text', methods=['POST'])
+socketio.on('message')
+def front_text(msg):
+    print('Message: ' + msg)
+    send(msg, broadcast=True)
+    #client_instance = app.config.get('CLIENT_INSTANCE')
+
+
+@app.route('/api/send', methods=['POST'])
 def send_text():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求发送文本消息"""
@@ -155,7 +169,7 @@ def send_text():
     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
 
 
-@app.route('/box-size', methods=['POST'])
+@app.route('/api/box-size', methods=['POST'])
 def update_screen_size():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """接收前端传入的边界框大小"""

@@ -8,6 +8,8 @@ from util import *
 from aiortc import VideoStreamTrack, RTCPeerConnection
 from aiortc.contrib.media import MediaPlayer, MediaRelay
 from api import app
+from log_register_func import *
+from flask_socketio import SocketIO, emit
 
 client_instance = app.config.get('CLIENT_INSTANCE')
 
@@ -17,11 +19,16 @@ async def establish_connect(self):
         for type in self.support_data_types:
             port = self.ports.get(type)
             print("port:", port)
-            reader, writer = await asyncio.open_connection(self.server_addr[0], port)  # Add await here
-            self.sockets[type] = (reader, writer)
-        print(f"[Info]: Connected to '{self.server_addr}' server.")
+            if type == 'text':
+                established_client, info = connection_establish((self.server_addr[0], port))
+                self.sockets[type] = established_client
+            if type == 'audio':
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((self.server_addr[0], port))
+                self.sockets[type] = sock
+        print(f"[Info]: Connected to '{self.server_addr[0]}' server.")
     except Exception as e:
-        print(f"[Error]: Could not connect to '{self.server_addr}' server: {e}")
+        print(f"[Error]: Could not connect to '{self.server_addr[0]}' server: {e}")
 
 
 async def close_connection(self):
@@ -56,13 +63,14 @@ async def output_data(self, fps_or_frequency):
         """
     screen_image = None
     while self.on_meeting:
+        # 已将audio移除
         # Example for outputting received data (can be extended to handle all data types)
-        if not self.data_queues['audio'].empty():
-            if not streamout.is_active():
-                streamout.start_stream()
-            streamout.write(self.data_queues['audio'].get())
-        else:
-            streamout.stop_stream()
+        # if not self.data_queues['audio'].empty():
+        #     if not streamout.is_active():
+        #         streamout.start_stream()
+        #     streamout.write(self.data_queues['audio'].get())
+        # else:
+        #     streamout.stop_stream()
         if not self.data_queues['screen'].empty():
             screen_image = decompress_image(self.data_queues['screen'].get())
             screen_image.show()
@@ -80,6 +88,14 @@ async def output_data(self, fps_or_frequency):
             await send_camera_frame_to_frontend(all_user_camera_data)
         if not self.data_queues['text'].empty():
             received_message = self.text_queue.get()
+            emit('text_message', received_message)
+            #       前端代码
+            #         // 监听服务器发送的 'text_message' 事件
+            #         socket.on('text_message', function(data) {
+            #             console.log('Received message from server:', data);
+            #             // 将接收到的消息显示在网页中
+            #             document.getElementById('message').innerText = data;
+            #         });
             try:
                 with open('user_commands.txt', 'a', encoding='utf-8') as f:
                     f.write(received_message)
@@ -90,7 +106,8 @@ async def output_data(self, fps_or_frequency):
 
 
 async def send_datas(self):
-    await asyncio.gather(send_texts(self), send_audio(self), send_camera(self))
+    # await asyncio.gather(send_texts(self), send_audio(self), send_camera(self))
+    await asyncio.gather(send_texts(self))
 
     # if self.acting_data_types['video']:
     #     pass
@@ -102,54 +119,69 @@ async def send_datas(self):
 async def send_texts(self):
     while self.is_working and self.on_meeting:
         print("[Info]: Starting text transmission...")
-        reader, writer = self.sockets['text']
+        established_text = self.sockets['text']
         while self.is_working and self.on_meeting:
+            print("[Info]: Sending text...")
             # 等待事件触发
             await self.text_event.wait()
+            print("[Info]: Text transmitted.")
             # 事件触发后处理数据
             if self.text:
+                print("[Info]: Updating text...")
                 print(f"[Info]: Sending: {self.text}")
-                writer.write(self.text.encode())
-                await writer.drain()
+                established_text.send(self.text.encode('utf-8'))
                 self.text_event.clear()  # 重置事件
 
-
+#        client_instance.established_client.send(message.encode("utf-8"))
+#       recv_data = server_response(client_instance.established_client, None).decode("utf-8")
 async def receive_text(self, decompress=None):
     print("[Info]: Starting text playback monitoring...")
-    reader, writer = self.sockets['text']
+    established_text = self.sockets['text']
     while self.on_meeting:
-        text_chunk = await reader.read(CHUNK)
-        self.data_queues['text'].put_nowait(text_chunk)
+        recv_data = await server_response(established_text, None).decode("utf-8")
+        self.data_queues['text'].put_nowait(recv_data)
 
 
-async def send_audio(self):
-    while self.is_working and self.on_meeting:
-        if not self.acting_data_types['audio']:
-            await asyncio.sleep(0.2)
-            continue
-        if not streamin.is_active():
-            streamin.start_stream()
-        reader, writer = self.sockets['audio']
-        while self.is_working and self.on_meeting and self.acting_data_types['audio']:
-            audio_chunk = streamin.read(CHUNK)
-            if not audio_chunk:
-                break
-            writer.write(audio_chunk)
-            await writer.drain()
-        streamin.stop_stream()
+# 发送音频数据的线程
+def send_audio(self):
+    while True:
+        data = streamin.read(CHUNK)  # 从麦克风读取音频数据
+        self.sockets['audio'].sendall(data)           # 通过 socket 发送数据
 
+# 接收音频数据并播放的线程
+def receive_audio(self):
+    while True:
+        data = self.sockets['audio'].recv(CHUNK)     # 从服务器接收音频数据
+        streamout.write(data)       # 播放音频数据到扬声器
 
-async def receive_audio(self, decompress=None):
-    """
-        running task: keep receiving certain type of data (save or output)
-        you can create other functions for receiving various kinds of data
-        """
-    print("[Info]: Starting audio playback monitoring...")
-    reader, writer = self.sockets['audio']
-    while self.on_meeting:
-        # 挂起
-        audio_chunk = await reader.read(CHUNK)
-        self.data_queues['audio'].put_nowait(audio_chunk)
+# async def send_audio(self):
+#     while self.is_working and self.on_meeting:
+#         if not self.acting_data_types['audio']:
+#             await asyncio.sleep(0.2)
+#             continue
+#         if not streamin.is_active():
+#             streamin.start_stream()
+#         reader, writer = self.sockets['audio']
+#         while self.is_working and self.on_meeting and self.acting_data_types['audio']:
+#             audio_chunk = streamin.read(CHUNK)
+#             if not audio_chunk:
+#                 break
+#             writer.write(audio_chunk)
+#             await writer.drain()
+#         streamin.stop_stream()
+#
+#
+# async def receive_audio(self, decompress=None):
+#     """
+#         running task: keep receiving certain type of data (save or output)
+#         you can create other functions for receiving various kinds of data
+#         """
+#     print("[Info]: Starting audio playback monitoring...")
+#     reader, writer = self.sockets['audio']
+#     while self.on_meeting:
+#         # 挂起
+#         audio_chunk = await reader.read(CHUNK)
+#         self.data_queues['audio'].put_nowait(audio_chunk)
 
     # sock = self.sockets['camera']
     # while self.is_working and self.on_meeting:

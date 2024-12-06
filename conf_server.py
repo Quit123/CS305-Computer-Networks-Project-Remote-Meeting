@@ -28,8 +28,6 @@ class ConferenceServer:
         """
         while self.run:
             data = await reader.read(1024)
-            if not data:
-                break
             for w in self.client_conns:
                 if w != writer:
                     w.write(data)
@@ -43,40 +41,33 @@ class ConferenceServer:
         """
         message = message.decode()
         parts = message.strip().split(" ")
-        if(parts[1]=="JOIN"):
-            if(writer not in self.client_conns):
-                self.client_conns.append(writer)
-                self.user_name.append(parts[-1])
-                self.online_users+=1
-                self.last_join_user = parts[-1]
-                writer.write(f"SUCCESS join confernece {self.title}".encode())
-                await writer.drain()
+        if(parts[0].startswith('[COMMAND]')):
+            if(parts[1]=="JOIN"):
+                if(writer not in self.client_conns):
+                    self.client_conns.append(writer)
+                    self.user_name.append(parts[-1])
+                    self.online_users+=1
+                    self.last_join_user = parts[-1]
+                    writer.write(f"SUCCESS join confernece {self.title}".encode())
+                    await writer.drain()
+                else:
+                    writer.write("FAILURE wrong user".encode())
+                    await writer.drain()
+            elif(parts[1]=="QUIT"):
+                if(writer in self.client_conns):
+                    self.client_conns.remove(writer)
+                    self.user_name.remove(parts[-1])
+                    self.last_online_users-=1
+                    self.online_users-=1
+                    writer.write("SUCCESS quit confernece".encode())
+                    await writer.drain()
+                else:
+                    writer.write("FAILURE wrong user".encode())
+                    await writer.drain()                
             else:
-                writer.write("FAILURE wrong user".encode())
+                writer.write("FAILURE invalid command".encode())
                 await writer.drain()
-        elif(parts[1]=="QUIT"):
-            if(writer in self.client_conns):
-                self.client_conns.remove(writer)
-                self.user_name.remove(parts[-1])
-                self.last_online_users-=1
-                self.online_users-=1
-                writer.write("SUCCESS quit confernece".encode())
-                await writer.drain()
-            else:
-                writer.write("FAILURE wrong user".encode())
-                await writer.drain()                
-        else:
-            writer.write("FAILURE invalid command".encode())
-            await writer.drain()
-
-    async def _handle_client(self, reader:StreamReader, writer:StreamWriter):
-        """
-        running task: handle the in-meeting requests or messages from clients
-        """
-        while self.run:
-            message = await reader.read(1024).decode()
-            parts = message.strip().split(" ")
-            if(parts[0].startswith('[ASK]')):
+        elif(parts[0].startswith('[ASK]')):
                 if(self.online_users>self.last_online_users):
                     writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
                     await writer.drain()
@@ -84,10 +75,10 @@ class ConferenceServer:
                     writer.write("[ANS]: No False".encode())
                     await writer.drain()
                 self.last_online_users = self.online_users
-            else:
-                print("invalid command")
-                writer.write("FAILURE invalid command".encode())
-                await writer.drain()
+        else:
+            print("invalid message")
+            writer.write("FAILURE invalid message".encode())
+            await writer.drain()
 
     async def log(self):
         while self.run:
@@ -111,10 +102,10 @@ class ConferenceServer:
         # 启动不同数据类型的服务器
         print("testb1")
         self.audio_server, self.screen_server, self.camera_server, self.text_server = (
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8001),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8002),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8003),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8004),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8001),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8002),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8004),
         )
         print("testb2")
         # 将服务器引用保存在列表中
