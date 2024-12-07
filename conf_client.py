@@ -23,6 +23,7 @@ class ConferenceClient:
         #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
+        self.acting_data_types['audio'] = True
         self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
         # 初始化字典
         self.sockets = {}
@@ -171,8 +172,8 @@ class ConferenceClient:
         # task_receive_text = asyncio.create_task(receive_text(self))
         # task_output = asyncio.create_task(output_data(self, fps_or_frequency))
         # task_send_text = asyncio.create_task(send_texts(self))
-        self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
-        self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        # self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+        # self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
         # self.loop.run_forever()
         print("good")
 

@@ -168,26 +168,80 @@ async def receive_text(self, decompress=None):
 
 # 发送音频数据的线程
 async def send_audio(self, fps_or_frequency):
-    streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-    print("run send audio")
-    while True:
-        print("send audio")
-        data = streamin.read(CHUNK)  # 从麦克风读取音频数据
-        self.sockets['audio'].sendall(data)           # 通过 socket 发送数据
-        await asyncio.sleep(1 / fps_or_frequency)
+    try:
+        streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+        print("run send audio")
+        audio_queue = asyncio.Queue(maxsize=10)  # 限制队列大小
+        while self.on_meeting:
+            try:
+                data = streamin.read(CHUNK)  # 从麦克风读取音频数据
+                if not data:
+                    print("[Warning]: No audio data received.")
+                    continue  # 没有数据时跳过，避免发送空数据
+
+                if audio_queue.full():
+                    print("[Warning]: Audio queue is full, waiting to send.")
+                    await asyncio.sleep(0.1)  # 等待队列有空间
+                await audio_queue.put(data)  # 将数据放入队列
+
+                # 从队列中取出数据并发送
+                audio_data = await audio_queue.get()
+                self.sockets['audio'].sendall(audio_data)  # 通过 socket 发送数据
+
+            except socket.error as e:
+                print(f"[Error]: Socket error during audio send: {e}")
+                # 处理连接错误，可以重新尝试连接或退出
+                break  # 连接中断，退出循环
+            except Exception as e:
+                print(f"[Error]: Unexpected error during audio send: {e}")
+                break  # 捕获其他异常，退出循环
+            await asyncio.sleep(1 / fps_or_frequency)
+    except Exception as e:
+        print(f"[Error]: Error in send_audio: {e}")
+
 
 # 接收音频数据并播放的线程
 async def receive_audio(self, fps_or_frequency):
-    loop = asyncio.get_event_loop()
-    established_text = self.sockets['audio']
-    streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
-    print("run into audio")
-    while True:
-        print("receive audio")
-        recv_data = await loop.sock_recv(established_text, 1024)
-        # data = self.sockets['audio'].recv(CHUNK)     # 从服务器接收音频数据
-        streamout.write(recv_data)       # 播放音频数据到扬声器
-        await asyncio.sleep(1 / fps_or_frequency)
+    try:
+        loop = asyncio.get_event_loop()
+        established_text = self.sockets['audio']
+        streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
+        print("run into audio")
+
+        audio_queue = asyncio.Queue(maxsize=10)  # 控制队列大小
+
+        while self.on_meeting:
+            try:
+                recv_data = await loop.sock_recv(established_text, 1024)
+                streamout.write(recv_data)
+
+                if not self.acting_data_types['audio']:
+                    print("[Warning]: Connection closed by server")
+                    break  # 连接被关闭，退出循环
+
+                if audio_queue.full():
+                    print("[Warning]: Audio queue is full, waiting to process.")
+                    await asyncio.sleep(0.1)  # 等待队列有空间
+
+                await audio_queue.put(recv_data)  # 将数据放入队列
+
+                # 从队列中取出数据并播放
+                audio_data = await audio_queue.get()
+                streamout.write(audio_data)  # 播放接收到的音频数据
+
+                print("Received audio data")
+                # 处理数据...
+            except ConnectionAbortedError as e:
+                print(f"[Error]: Connection aborted: {e}")
+                break
+            await asyncio.sleep(1/fps_or_frequency)
+    except Exception as e:
+        print(f"[Error]: An error occurred in receive_audio: {e}")
+        # print("receive audio")
+        # recv_data = await loop.sock_recv(established_text, 1024)
+        # # data = self.sockets['audio'].recv(CHUNK)     # 从服务器接收音频数据
+        # streamout.write(recv_data)       # 播放音频数据到扬声器
+        # await asyncio.sleep(1 / fps_or_frequency)
 
 # async def send_audio(self):
 #     while self.is_working and self.on_meeting:
