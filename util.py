@@ -27,6 +27,15 @@ socketio = SocketIO(app)
 streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
 
+# def close_audio_streams(self):
+#     if hasattr(self, 'streamin'):
+#         self.streamin.stop_stream()
+#         self.streamin.close()
+#     if hasattr(self, 'streamout'):
+#         self.streamout.stop_stream()
+#         self.streamout.close()
+#     if hasattr(self, 'audio'):
+#         self.audio.terminate()
 # print warning if no available camera
 cap = cv2.VideoCapture(0)
 if cap.isOpened():
