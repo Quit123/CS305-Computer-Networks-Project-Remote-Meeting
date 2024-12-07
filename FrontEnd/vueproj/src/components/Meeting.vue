@@ -21,7 +21,7 @@
       <a-layout-sider class="chat-section" :width="250">
         <div class="chat-messages">
           <div v-for="(message, index) in messages" :key="index" class="chat-message">
-            <strong>{{ message.user }}:</strong> {{ message.text }}
+            <strong>{{ message.user }}:</strong> {{ message.message }}
           </div>
         </div>
         <div class="chat-input">

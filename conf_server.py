@@ -53,7 +53,9 @@ class ConferenceServer:
                     self.user_name.append(parts[-1])
                     self.online_users += 1
                     self.last_join_user = parts[-1]
+                    print(f"SUCCESS join confernece {self.title}")
                     writer.write(f"SUCCESS join confernece {self.title}".encode())
+                    print(writer)
                     await writer.drain()
                 else:
                     writer.write("FAILURE wrong user".encode())

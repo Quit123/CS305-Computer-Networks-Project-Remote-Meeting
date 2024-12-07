@@ -19,7 +19,7 @@ class ConferenceClient:
         self.host = host
         self.user_name = None
         self.log_status = False
-        self.support_data_types = ['text']
+        self.support_data_types = ['text', 'audio']
         #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
@@ -171,8 +171,8 @@ class ConferenceClient:
         # task_receive_text = asyncio.create_task(receive_text(self))
         # task_output = asyncio.create_task(output_data(self, fps_or_frequency))
         # task_send_text = asyncio.create_task(send_texts(self))
-        # self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
-        # self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+        self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
         # self.loop.run_forever()
         print("good")
 
@@ -180,7 +180,10 @@ class ConferenceClient:
         # task_list = [asyncio.create_task(receive_text(self)), asyncio.create_task(send_texts(self)),asyncio.create_task(output_data(self, fps_or_frequency))]
         #     await asyncio.wait(task_list)
         await asyncio.gather(receive_text(self),
-                                 send_texts(self))
+                                 send_texts(self, fps_or_frequency),
+                             receive_audio(self, fps_or_frequency),
+                             send_audio(self, fps_or_frequency)
+                             )
                                  # asyncio.create_task(output_data(self, fps_or_frequency)))
 
 
@@ -204,36 +207,6 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
-        # global established_client
-        # try:
-        #     established_client, info = connection_establish(self.server_addr)
-        #     print(info)
-        #     while True:
-        #         if not self.log_status:
-        #             if api.login_info["status"]:
-        #                 print("Login successful.")
-        #                 self.log_status = True
-        #         else:
-        #             if not self.on_meeting:
-        #                 pass
-        #                 # if self.join_event.is_set():
-        #                 #     self.join_conference(api.join_info['con_id'])
-        #                 #     self.join_event.clear()
-        #             else:
-        #                 pass
-        #                 # done, pending = await asyncio.wait(
-        #                 #     [self.create_event.wait(), self.join_event.wait()],
-        #                 #     return_when=asyncio.FIRST_COMPLETED
-        #                 # )
-        #                 # if self.quit_event.is_set():
-        #                 #     self.quit_conference()
-        #                 #     self.quit_event.clear()
-        #                 # if self.cancel_event.is_set():
-        #                 #     self.cancel_conference()
-        #                 #     self.cancel_event.clear()
-        # except Exception as e:
-        #     print("[Warn]: Exception occurred:\n", e)
-        # # Close the connection when the application ends
 
 
 if __name__ == '__main__':
