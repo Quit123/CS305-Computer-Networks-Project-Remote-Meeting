@@ -16,7 +16,10 @@ class ConferenceServer:
         self.data_serve_ports = [8001, 8002, 8003, 8004]  # self.data_serve_ports=[]
         self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
         self.user_name = []
-        self.client_conns = []
+        self.audio_conns = []
+        self.screen_conns = []
+        self.camera_conns = []
+        self.text_conns = []
         self.servers = []
         self.online_users = 0
         self.last_online_users = 0
@@ -25,16 +28,24 @@ class ConferenceServer:
         self.run = True
         self.tasks = []
 
-    async def handle_data(self, reader: StreamReader, writer: StreamWriter):
+    async def handle_data(self, reader: StreamReader, writer: StreamWriter, type):
         """
         running task: receive sharing stream data from a client and decide how to forward them to the rest clients
         """
-        if(writer not in self.client_conns):
-            self.client_conns.append(writer)
+        if type == 'audio':
+            conns = self.audio_conns
+        elif type == 'screen':
+            conns = self.screen_conns
+        elif type == 'camera':
+            conns = self.camera_conns
+        else:
+            conns = self.text_conns
+        if(writer not in conns):
+            conns.append(writer)
         while self.run:
             data = await reader.read(1024)
-            print(data.decode())
-            for w in self.client_conns:
+            # print(data.decode())
+            for w in conns:
                 if w != writer:
                     w.write(data)
                     await w.drain()
@@ -115,10 +126,10 @@ class ConferenceServer:
     async def build(self):
         print("testb1")
         self.audio_server, self.screen_server, self.camera_server, self.text_server = (
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8001),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8002),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8003),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8004),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w,"audio"), '10.32.111.112', 8001),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w,"screen"), '10.32.111.112', 8002),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w,"screen"), '10.32.111.112', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w,"text"), '10.32.111.112', 8004),
             # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[0]),
             # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[1]),
             # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[2]),
