@@ -67,8 +67,8 @@ class ConferenceClient:
             # await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
             # await self.keep_share()
-            print(f"share cut down or quit meeting: {self.on_meeting}")
-            #return f"[Success]: Conference created with ID {self.conference_id}"
+            # print(f"share cut down or quit meeting: {self.on_meeting}")
+            return f"[Success]: Conference created with ID {self.conference_id}", self.conference_id
         else:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
@@ -82,7 +82,7 @@ class ConferenceClient:
         # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = await self.send_request(request_data)
-        if "SUCCESS" in response:
+        if "Success" in response:
             self.conference_id = conference_id
             self.on_meeting = True
             await self.start_conference()
@@ -168,27 +168,17 @@ class ConferenceClient:
         running task: keep sharing (capture and send) certain type of data from server or clients (P2P)
         you can create different functions for sharing various kinds of data
         """
-        # 启动任务并立即返回
-        # receive_data,每种写一个
-        # output_data
-        # send_data
-        # await asyncio.gather(receive_text(self),
-        #                      receive_audio(self),
-        #                      receive_camera(self),
-        #                      output_data(self, fps_or_frequency),
-        #                      send_datas(self),
-        #                      ask_new_clients_and_share_screen(self))
-        # send_thread = threading.Thread(target=send_audio)
-        # receive_thread = threading.Thread(target=receive_audio)
-        # send_thread.start()
-        # receive_thread.start()
-        # send_thread.join()
-        # receive_thread.join()
-        await asyncio.gather(receive_text(self),
-                             self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
-                             self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
-                             output_data(self, fps_or_frequency),
-                             send_datas(self))
+        # task_receive_text = asyncio.create_task(receive_text(self))
+        # task_output = asyncio.create_task(output_data(self, fps_or_frequency))
+        # task_send_text = asyncio.create_task(send_texts(self))
+        self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+        self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        print("good")
+        #while(self.on_meeting):
+        while self.on_meeting:
+            await asyncio.gather(# receive_text(self),
+                                 # output_data(self, fps_or_frequency),
+                                 send_texts(self))
 
     def share_switch(self, data_type):
         """

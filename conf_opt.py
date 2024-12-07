@@ -23,6 +23,10 @@ async def establish_connect(self):
                 established_client, info = connection_establish((self.server_addr[0], port))
                 self.sockets[type] = established_client
             if type == 'audio':
+                # 尝试UDP
+                # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 使用 UDP 协议
+                # self.sockets[type] = sock
+                # TCP
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((self.server_addr[0], port))
                 self.sockets[type] = sock
@@ -62,84 +66,83 @@ async def output_data(self, fps_or_frequency):
         running task: output received stream data
         """
     screen_image = None
-    while self.on_meeting:
-        # 已将audio移除
-        # Example for outputting received data (can be extended to handle all data types)
-        # if not self.data_queues['audio'].empty():
-        #     if not streamout.is_active():
-        #         streamout.start_stream()
-        #     streamout.write(self.data_queues['audio'].get())
-        # else:
-        #     streamout.stop_stream()
-        if not self.data_queues['screen'].empty():
-            screen_image = decompress_image(self.data_queues['screen'].get())
-            screen_image.show()
-        if not self.data_queues['camera'].empty():
-            all_user_camera_data = []
-            for username, user_camera_queue in self.data_queues['camera'].items():
-                if not user_camera_queue.empty():
-                    # 获取摄像头图像并解压
-                    camera_image_bytes = user_camera_queue.get()
-                    camera_image = decompress_image(camera_image_bytes)
-                    all_user_camera_data.append({
-                        'username': username,
-                        'camera_image': base64.b64encode(camera_image).decode('utf-8')
-                    })
-            await send_camera_frame_to_frontend(all_user_camera_data)
-        if not self.data_queues['text'].empty():
-            received_message = self.text_queue.get()
-            emit('text_message', received_message)
-            #       前端代码
-            #         // 监听服务器发送的 'text_message' 事件
-            #         socket.on('text_message', function(data) {
-            #             console.log('Received message from server:', data);
-            #             // 将接收到的消息显示在网页中
-            #             document.getElementById('message').innerText = data;
-            #         });
-            try:
-                with open('user_commands.txt', 'a', encoding='utf-8') as f:
-                    f.write(received_message)
-            except Exception as e:
-                print(f"upload entry error: {e}")
+    # while self.on_meeting:
+    # 已将audio移除
+    # Example for outputting received data (can be extended to handle all data types)
+    # if not self.data_queues['audio'].empty():
+    #     if not streamout.is_active():
+    #         streamout.start_stream()
+    #     streamout.write(self.data_queues['audio'].get())
+    # else:
+    #     streamout.stop_stream()
+    if not self.data_queues['screen'].empty():
+        screen_image = decompress_image(self.data_queues['screen'].get())
+        screen_image.show()
+    if not self.data_queues['camera'].empty():
+        all_user_camera_data = []
+        for username, user_camera_queue in self.data_queues['camera'].items():
+            if not user_camera_queue.empty():
+                # 获取摄像头图像并解压
+                camera_image_bytes = user_camera_queue.get()
+                camera_image = decompress_image(camera_image_bytes)
+                all_user_camera_data.append({
+                    'username': username,
+                    'camera_image': base64.b64encode(camera_image).decode('utf-8')
+                })
+        await send_camera_frame_to_frontend(all_user_camera_data)
+    if not self.data_queues['text'].empty():
+        received_message = self.text_queue.get()
+        # emit('text_message', received_message)
+        #       前端代码
+        #         // 监听服务器发送的 'text_message' 事件
+        #         socket.on('text_message', function(data) {
+        #             console.log('Received message from server:', data);
+        #             // 将接收到的消息显示在网页中
+        #             document.getElementById('message').innerText = data;
+        #         });
+        try:
+            with open('user_commands.txt', 'a', encoding='utf-8') as f:
+                f.write(received_message)
+        except Exception as e:
+            print(f"upload entry error: {e}")
 
-        await asyncio.sleep(1 / fps_or_frequency)
+    await asyncio.sleep(1 / fps_or_frequency)
 
 
-async def send_datas(self):
-    # await asyncio.gather(send_texts(self), send_audio(self), send_camera(self))
-    await asyncio.gather(send_texts(self))
-
-    # if self.acting_data_types['video']:
-    #     pass
-    # if self.acting_data_types['audio']:
-    #     pass
-    await asyncio.sleep(0)
+# async def send_datas(self):
+#     # await asyncio.gather(send_texts(self), send_audio(self), send_camera(self))
+#     await asyncio.gather(send_texts(self))
+#
+#     await asyncio.sleep(0)
 
 
 async def send_texts(self):
-    while self.is_working and self.on_meeting:
-        print("[Info]: Starting text transmission...")
-        established_text = self.sockets['text']
-        while self.is_working and self.on_meeting:
-            print("[Info]: Sending text...")
-            # 等待事件触发
-            await self.text_event.wait()
-            print("[Info]: Text transmitted.")
-            # 事件触发后处理数据
-            if self.text:
-                print("[Info]: Updating text...")
-                print(f"[Info]: Sending: {self.text}")
-                established_text.send(self.text.encode('utf-8'))
-                self.text_event.clear()  # 重置事件
+    # while self.is_working and self.on_meeting:
+    #     print("[Info]: Starting text transmission...")
+    #
+    #     while self.is_working and self.on_meeting:
+    established_text = self.sockets['text']
+    print("[Info]: Sending text...")
+    # 等待事件触发
+    await self.text_event.wait()
+    print("[Info]: Text transmitted.")
+    # 事件触发后处理数据
+    if self.text:
+        print("[Info]: Updating text...")
+        print(f"[Info]: Sending: {self.text}")
+        established_text.send(self.text.encode('utf-8'))
+        self.text_event.clear()  # 重置事件
+    await asyncio.sleep(0)
 
 #        client_instance.established_client.send(message.encode("utf-8"))
 #       recv_data = server_response(client_instance.established_client, None).decode("utf-8")
 async def receive_text(self, decompress=None):
     print("[Info]: Starting text playback monitoring...")
     established_text = self.sockets['text']
-    while self.on_meeting:
-        recv_data = await server_response(established_text, None).decode("utf-8")
-        self.data_queues['text'].put_nowait(recv_data)
+    # while self.on_meeting:
+    recv_data = await server_response(established_text, None).decode("utf-8")
+    self.data_queues['text'].put_nowait(recv_data)
+    await asyncio.sleep(0)
 
 
 # 发送音频数据的线程
