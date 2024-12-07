@@ -29,6 +29,7 @@ class ConferenceServer:
         """
         while self.run:
             data = await reader.read(1024)
+            print(data.decode())
             for w in self.client_conns:
                 if w != writer:
                     w.write(data)
@@ -40,7 +41,7 @@ class ConferenceServer:
         """
         running task: handle the in-meeting requests or messages from clients
         """
-        message = message.decode()
+        message = message
         parts = message.strip().split(" ")
         if(parts[0].startswith('[COMMAND]')):
             if(parts[1]=="JOIN"):
@@ -188,9 +189,9 @@ class MainServer:
                 await writer.drain()
             else:
                 conference = self.conference_servers[conference_id]
-                conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
+                await conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
                 self.clients_info[(writer, reader)] = conference_id  # 标识每个客户端加入的会议
-                writer.write(f'Success: Joined Conference {conference_id}'.encode())
+                writer.write(f'SUCCESS: Joined Conference {conference_id}'.encode())
                 await writer.drain()
         else:
             writer.write('Fail: Conference not found'.encode())
@@ -204,7 +205,7 @@ class MainServer:
             cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
             self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
             self.clients_info.pop((writer, reader))  # 该用户未加入会议
-            writer.write(f'Success: Quit Conference: {cid}'.encode())
+            writer.write(f'SUCCESS: Quit Conference: {cid}'.encode())
             await writer.drain()
         else:
             writer.write('Fail: You do not have a meeting now'.encode())
@@ -223,7 +224,7 @@ class MainServer:
             for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
                 self.clients_info.pop((w, r))
             self.conference_servers.pop(conference_id)  # 删除该会议
-            writer.write(f'Success: Cancel Conference: {conference_id}'.encode())
+            writer.write(f'SUCCESS: Cancel Conference: {conference_id}'.encode())
             await writer.drain()
         else:
             writer.write('Fail: Permission deny'.encode())

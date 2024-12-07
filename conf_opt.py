@@ -20,6 +20,7 @@ async def establish_connect(self):
             port = self.ports.get(type)
             print("port:", port)
             if type == 'text':
+                #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 established_client, info = connection_establish((self.server_addr[0], port))
                 self.sockets[type] = established_client
             if type == 'audio':
@@ -117,43 +118,65 @@ async def output_data(self, fps_or_frequency):
 
 
 async def send_texts(self):
+    while(True):
     # while self.is_working and self.on_meeting:
     #     print("[Info]: Starting text transmission...")
     #
     #     while self.is_working and self.on_meeting:
-    established_text = self.sockets['text']
-    print("[Info]: Sending text...")
-    # 等待事件触发
-    await self.text_event.wait()
-    print("[Info]: Text transmitted.")
-    # 事件触发后处理数据
-    if self.text:
-        print("[Info]: Updating text...")
-        print(f"[Info]: Sending: {self.text}")
-        established_text.send(self.text.encode('utf-8'))
-        self.text_event.clear()  # 重置事件
-    await asyncio.sleep(0)
+        established_text = self.sockets['text']
+        print("[Info]: Sending text...")
+        # 等待事件触发
+        # await self.text_event.wait()
+        print("self.text:", self.text)
+        # 事件触发后处理数据
+        if self.text:
+            print("[Info]: Updating text...")
+            print(f"[Info]: Sending: {self.text}")
+            established_text.send(self.text.encode('utf-8'))
+            self.text = None
+            # self.text_event.clear()  # 重置事件
+        await asyncio.sleep(1)
 
 #        client_instance.established_client.send(message.encode("utf-8"))
 #       recv_data = server_response(client_instance.established_client, None).decode("utf-8")
 async def receive_text(self, decompress=None):
-    print("[Info]: Starting text playback monitoring...")
+    loop = asyncio.get_event_loop()
     established_text = self.sockets['text']
-    # while self.on_meeting:
-    recv_data = await server_response(established_text, None).decode("utf-8")
-    self.data_queues['text'].put_nowait(recv_data)
-    await asyncio.sleep(0)
+    while(self.on_meeting):
+        recv_data = None
+        print("[Info]: Starting text playback monitoring...")
+        recv_data = await loop.sock_recv(established_text, 1024)
+        # while self.on_meeting:
+        # recv_data = await asyncio.wait_for(established_text.recv(1024), timeout=1/30)
+        if(recv_data):
+            print("receive message:", recv_data)
+            recv_data = recv_data.decode('utf-8')
+        await asyncio.sleep(1)
+    # recv_data = None
+    # print("[Info]: Starting text playback monitoring...")
+    # established_text = self.sockets['text']
+    # # while self.on_meeting:
+    # try:
+    #     recv_data = await asyncio.wait_for(server_response(established_text, None), timeout=1 / 30)
+    # except asyncio.TimeoutError:
+    #     pass
+    # print("pass await")
+    # if recv_data:
+    #     self.data_queues['text'].put_nowait(recv_data.decode("utf-8"))
+    # await asyncio.sleep(0)
 
 
 # 发送音频数据的线程
 def send_audio(self):
     while True:
+        print("run audio")
         data = streamin.read(CHUNK)  # 从麦克风读取音频数据
         self.sockets['audio'].sendall(data)           # 通过 socket 发送数据
 
 # 接收音频数据并播放的线程
 def receive_audio(self):
     while True:
+        print("rev audio running")
         data = self.sockets['audio'].recv(CHUNK)     # 从服务器接收音频数据
         streamout.write(data)       # 播放音频数据到扬声器
 

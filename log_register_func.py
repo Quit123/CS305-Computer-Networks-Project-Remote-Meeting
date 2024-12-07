@@ -63,7 +63,6 @@ def connection_establish(ip_p):
         port = int(port_s)
 
         socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         socket_client.connect((ip, port))
 
         return socket_client, 'success\n'
@@ -245,7 +244,7 @@ def server_response(server, password_hash):
     """
     # TODO: finish the codes
     response = server.recv(1024)
-
+    print("pass")
     fail_sign = "400".encode('utf-8')
     register_sign = "Registering successfully".encode('utf-8')
     change_sign = "changed password".encode('utf-8')

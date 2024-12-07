@@ -157,19 +157,22 @@ def update_camera_status():
 def send_text(msg):
     # 自己发送的信息要传用户名
     # server发送的信息需要特殊标识一下
+
+    # print(str(msg))
     send(msg, broadcast=True)
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求发送文本消息"""
-    if 'message' in msg:
-        client_instance.text = msg['message']
-        print("client_instance.text:", client_instance.text)
-        client_instance.text_event.set()
-        return jsonify({'status': 'success', 'message': client_instance.text})
-    return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
+    #if 'message' in msg:
+    client_instance.text = msg['message']
+    print("client_instance.text:", client_instance.text)
+    client_instance.text_event.set()
+
+    # return jsonify({'status': 'success', 'message': client_instance.text})
+    #return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
     #client_instance = app.config.get('CLIENT_INSTANCE')
 
 
-@socketio.on('message')
+@socketio.on('me')
 def rev_text(msg):
     send(msg, broadcast=True)
     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400

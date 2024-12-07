@@ -82,7 +82,7 @@ class ConferenceClient:
         # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = await self.send_request(request_data)
-        if "Success" in response:
+        if "SUCCESS" in response:
             self.conference_id = conference_id
             self.on_meeting = True
             await self.start_conference()
@@ -171,14 +171,18 @@ class ConferenceClient:
         # task_receive_text = asyncio.create_task(receive_text(self))
         # task_output = asyncio.create_task(output_data(self, fps_or_frequency))
         # task_send_text = asyncio.create_task(send_texts(self))
-        self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
-        self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        # self.loop.run_in_executor(None, send_audio),  # 在独立线程中执行 send_audio
+        # self.loop.run_in_executor(None, receive_audio),  # 在独立线程中执行 receive_audio
+        # self.loop.run_forever()
         print("good")
+
         #while(self.on_meeting):
-        while self.on_meeting:
-            await asyncio.gather(# receive_text(self),
-                                 # output_data(self, fps_or_frequency),
+        # task_list = [asyncio.create_task(receive_text(self)), asyncio.create_task(send_texts(self)),asyncio.create_task(output_data(self, fps_or_frequency))]
+        #     await asyncio.wait(task_list)
+        await asyncio.gather(receive_text(self),
                                  send_texts(self))
+                                 # asyncio.create_task(output_data(self, fps_or_frequency)))
+
 
     def share_switch(self, data_type):
         """
