@@ -1,19 +1,20 @@
 import asyncio
 from util import *
-import random
 import string
 from asyncio import StreamReader, StreamWriter
 from log_register_func import *
 
 users = load_users(user_inf_txt)
 print(users)
+
+
 class ConferenceServer:
     def __init__(self, conference_id, title):
         # async server
         self.conference_id = conference_id  # conference_id for distinguish difference conference
         self.title = title
-        self.data_serve_ports = [8001,8002,8003,8004]
-        self.data_types = ['audio','screen', 'camera','text']  # example data types in a video conference
+        self.data_serve_ports = [8001, 8002, 8003, 8004]  # self.data_serve_ports=[]
+        self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
         self.user_name = []
         self.client_conns = []
         self.servers = []
@@ -22,11 +23,14 @@ class ConferenceServer:
         self.last_join_user = "NULL"
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.run = True
+        self.tasks = []
 
-    async def handle_data(self, reader:StreamReader, writer:StreamWriter):
+    async def handle_data(self, reader: StreamReader, writer: StreamWriter):
         """
         running task: receive sharing stream data from a client and decide how to forward them to the rest clients
         """
+        if(writer not in self.client_conns):
+            self.client_conns.append(writer)
         while self.run:
             data = await reader.read(1024)
             print(data.decode())
@@ -37,18 +41,17 @@ class ConferenceServer:
         writer.close()
         await writer.wait_closed()
 
-    async def handle_client(self, reader:StreamReader, writer:StreamWriter, message):
+    async def handle_client(self, reader: StreamReader, writer: StreamWriter, message):
         """
         running task: handle the in-meeting requests or messages from clients
         """
         message = message
         parts = message.strip().split(" ")
-        if(parts[0].startswith('[COMMAND]')):
-            if(parts[1]=="JOIN"):
-                if(writer not in self.client_conns):
-                    self.client_conns.append(writer)
+        if (parts[0].startswith('[COMMAND]')):
+            if (parts[1] == "JOIN"):
+                if (parts[-1] not in self.user_name):
                     self.user_name.append(parts[-1])
-                    self.online_users+=1
+                    self.online_users += 1
                     self.last_join_user = parts[-1]
                     print(f"SUCCESS join confernece {self.title}")
                     writer.write(f"SUCCESS join confernece {self.title}".encode())
@@ -57,28 +60,27 @@ class ConferenceServer:
                 else:
                     writer.write("FAILURE wrong user".encode())
                     await writer.drain()
-            elif(parts[1]=="QUIT"):
-                if(writer in self.client_conns):
-                    self.client_conns.remove(writer)
+            elif (parts[1] == "QUIT"):
+                if (parts[-1] in self.client_conns):
                     self.user_name.remove(parts[-1])
-                    self.last_online_users-=1
-                    self.online_users-=1
+                    self.last_online_users -= 1
+                    self.online_users -= 1
                     writer.write("SUCCESS quit confernece".encode())
                     await writer.drain()
                 else:
                     writer.write("FAILURE wrong user".encode())
-                    await writer.drain()                
+                    await writer.drain()
             else:
                 writer.write("FAILURE invalid command".encode())
                 await writer.drain()
-        elif(parts[0].startswith('[ASK]')):
-                if(self.online_users>self.last_online_users):
-                    writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
-                    await writer.drain()
-                else:
-                    writer.write("[ANS]: No False".encode())
-                    await writer.drain()
-                self.last_online_users = self.online_users
+        elif (parts[0].startswith('[ASK]')):
+            if (self.online_users > self.last_online_users):
+                writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
+                await writer.drain()
+            else:
+                writer.write("[ANS]: No False".encode())
+                await writer.drain()
+            self.last_online_users = self.online_users
         else:
             print("invalid message")
             writer.write("FAILURE invalid message".encode())
@@ -102,14 +104,25 @@ class ConferenceServer:
             await server.wait_closed()
         self.client_conns.clear()
 
+    # async def start_server(self, port):
+    #     """
+    #     为指定端口启动一个异步服务器
+    #     """
+    #     server = await asyncio.start_server(self.handle_data, '127.0.0.1', port)
+    #     async with server:
+    #         await server.serve_forever()
+
     async def build(self):
-        # 启动不同数据类型的服务器
         print("testb1")
         self.audio_server, self.screen_server, self.camera_server, self.text_server = (
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8001),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8002),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8003),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '127.0.0.1', 8004),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8001),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8002),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', 8004),
+            # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[0]),
+            # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[1]),
+            # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[2]),
+            # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[3]),
         )
         print("testb2")
         # 将服务器引用保存在列表中
@@ -160,6 +173,7 @@ class MainServer:
         self.conference_manager = {}  # 管理创建会议的客户端
         self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
         self.manage_task = {}
+        self.ports = [8001, 8002, 8003, 8004]
 
     async def handle_creat_conference(self, writer, reader, title):
         """
@@ -169,14 +183,16 @@ class MainServer:
         characters = string.ascii_letters + string.digits
         # 生成随机密码
         conference_id = ''.join(random.choice(characters) for i in range(6))  # 会议唯一标识
-        new_conference = ConferenceServer(conference_id,title)  # 创建新会议服务器
+        print(conference_id)
+        new_conference = ConferenceServer(conference_id, title)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
         print("test1")
         task = asyncio.create_task(new_conference.start())
         self.manage_task[conference_id] = task
         print("test2")
-        writer.write(f'SUCCESS {conference_id}'.encode())  # 返回会议号
+        writer.write(
+            f'SUCCESS {conference_id}'.encode())  # 返回会议号以及会议端口 {self.ports[0]} {self.ports[1]} {self.ports[2]} {self.ports[3]}
         print("test3")
         await writer.drain()
 
@@ -185,7 +201,7 @@ class MainServer:
         join conference: search corresponding conference_info and ConferenceServer, and reply necessary info to client
         """
         if conference_id in self.conference_servers:  # 如果可以通过会议id找到会议
-            if (writer, reader)in self.clients_info:  #
+            if (writer, reader) in self.clients_info:  #
                 cid = self.clients_info[(writer, reader)]
                 writer.write(f'Fail:You have already joined the conference {cid}'.encode())
                 await writer.drain()
@@ -194,6 +210,7 @@ class MainServer:
                 await conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
                 self.clients_info[(writer, reader)] = conference_id  # 标识每个客户端加入的会议
                 writer.write(f'SUCCESS: Joined Conference {conference_id}'.encode())
+                print(conference_id)
                 await writer.drain()
         else:
             writer.write('Fail: Conference not found'.encode())
@@ -246,7 +263,7 @@ class MainServer:
                 f.write(f'{client_address}' + message + '\n')
                 print(f'{client_address}:{message}')
                 if message.startswith('[COMMAND]:'):
-                    print('here:'+message)
+                    print('here:' + message)
                     opera = message.split(' ')[1]
 
                     if opera.startswith('Create'):
