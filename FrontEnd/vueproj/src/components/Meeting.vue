@@ -61,7 +61,7 @@ export default {
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { user: 'You', text: this.newMessage });
+        this.socket.emit('message', { text: this.newMessage });
         this.newMessage = '';
       }
     },
@@ -78,7 +78,6 @@ export default {
       this.socket = io('http://127.0.0.1:5000');
       this.socket.on('connect', () => {
         console.log('WebSocket connected');
-        this.socket.emit('video_stream', { user_id: 'your_user_id' });
       });
       this.socket.on('video_frame', (data) => {
         const videoElement = this.$refs['video_' + data.user_id];
@@ -142,11 +141,6 @@ export default {
   height: 100%;
 }
 
-.video-pagination {
-  display: flex;
-  justify-content: space-between;
-  margin: 5px 0;
-}
 
 .controls {
   display: flex;
