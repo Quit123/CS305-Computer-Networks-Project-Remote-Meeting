@@ -204,36 +204,6 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
-        # global established_client
-        # try:
-        #     established_client, info = connection_establish(self.server_addr)
-        #     print(info)
-        #     while True:
-        #         if not self.log_status:
-        #             if api.login_info["status"]:
-        #                 print("Login successful.")
-        #                 self.log_status = True
-        #         else:
-        #             if not self.on_meeting:
-        #                 pass
-        #                 # if self.join_event.is_set():
-        #                 #     self.join_conference(api.join_info['con_id'])
-        #                 #     self.join_event.clear()
-        #             else:
-        #                 pass
-        #                 # done, pending = await asyncio.wait(
-        #                 #     [self.create_event.wait(), self.join_event.wait()],
-        #                 #     return_when=asyncio.FIRST_COMPLETED
-        #                 # )
-        #                 # if self.quit_event.is_set():
-        #                 #     self.quit_conference()
-        #                 #     self.quit_event.clear()
-        #                 # if self.cancel_event.is_set():
-        #                 #     self.cancel_conference()
-        #                 #     self.cancel_event.clear()
-        # except Exception as e:
-        #     print("[Warn]: Exception occurred:\n", e)
-        # # Close the connection when the application ends
 
 
 if __name__ == '__main__':

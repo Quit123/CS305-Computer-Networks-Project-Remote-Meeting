@@ -22,6 +22,7 @@ async def establish_connect(self):
             if type == 'text':
                 #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 established_client, info = connection_establish((self.server_addr[0], port))
+                print("建立status：", info)
                 self.sockets[type] = established_client
             if type == 'audio':
                 # 尝试UDP
@@ -142,7 +143,9 @@ async def send_texts(self):
 async def receive_text(self, decompress=None):
     loop = asyncio.get_event_loop()
     established_text = self.sockets['text']
-    while(self.on_meeting):
+    while self.on_meeting:
+        if not established_text:
+            print("[Info]: 初始化失败")
         recv_data = None
         print("[Info]: Starting text playback monitoring...")
         recv_data = await loop.sock_recv(established_text, 1024)
