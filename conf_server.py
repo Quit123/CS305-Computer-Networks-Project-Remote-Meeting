@@ -150,7 +150,6 @@ class ConferenceServer:
         # 并发运行服务器
         print("testb3")
         await asyncio.gather(
-            #self.UDP_server(),
             self.audio_server.serve_forever(),
             self.screen_server.serve_forever(),
             self.camera_server.serve_forever(),
