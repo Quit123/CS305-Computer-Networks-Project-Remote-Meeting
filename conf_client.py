@@ -82,22 +82,22 @@ class ConferenceClient:
         receive conference id.
         """
         new_conference = ConferenceServer(1, title_name)
-        print("[Info]: Creating a new conference...")
+        print("[Info]: Creating a p2p conference...")
         await new_conference.start()
 
     async def join_p2p_conference(self, ip):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
-        print(f"[Info]: Joining conference {ip}...")
+        print(f"[Info]: Joining {ip} conference ...")
         # 这里用来讲建立交流链接，text，和命令交流
         try:
             #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            established_client, info = connection_establish((ip, 8004))
-            await self.sockets['text'] = established_client
+            established_client, info = await connection_establish((ip, 8004))
+            self.sockets['text'] = established_client
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            await sock.connect((self.server_addr[0], 8001))
-            self.sockets[type] = sock
+            sock.connect((ip, 8001))
+            self.sockets['audio'] = sock
             print(f"[Info]: Connected to '{ip}' conference.")
             await self.keep_share()
         except Exception as e:
