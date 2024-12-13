@@ -115,6 +115,17 @@ async def Join_P2P():
     await client_instance.join_p2p_conference(ip)
 
 
+@app.route('/api/quit_p2p', methods=['POST'])
+def Quit_P2P():
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """Handle POST request for user login"""
+    # global quit
+    # quit = True
+    client_instance.quit_p2p_conference()
+    # if username in users and users[username] == password:
+    return jsonify({'status': 'success', 'message': 'Click quit return'})
+
+
 @app.route('/api/join', methods=['POST'])
 async def Join():
     print("click Join")
