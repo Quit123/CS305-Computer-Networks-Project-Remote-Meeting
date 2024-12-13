@@ -93,6 +93,13 @@ async def Create():
         return jsonify({'status': 'fail', 'message': ans})
 
 
+@app.route('/api/P2P', methods=['POST'])
+async def P2P():
+    # create P2P conference
+    data = request.json
+    title = data.get('title')
+
+
 @app.route('/api/join', methods=['POST'])
 async def Join():
     print("click Join")
