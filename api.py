@@ -93,11 +93,26 @@ async def Create():
         return jsonify({'status': 'fail', 'message': ans})
 
 
-@app.route('/api/P2P', methods=['POST'])
-async def P2P():
+@app.route('/api/create_p2p', methods=['POST'])
+async def Create_P2P():
     # create P2P conference
+    print("click Create P2P")
+    client_instance = app.config.get('CLIENT_INSTANCE')
     data = request.json
     title = data.get('title')
+    title = title + " " + client_instance.user_name
+    client_instance.create_p2p_conference(title)
+
+@app.route('/api/join_p2p', methods=['POST'])
+async def Join_P2P():
+    print("click Join P2P")
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """Handle POST request for user login"""
+    con_in = request.json
+    ip = con_in['con_id']
+    print(ip)
+    ip = ip + " " + client_instance.user_name
+    await client_instance.join_p2p_conference(ip)
 
 
 @app.route('/api/join', methods=['POST'])
