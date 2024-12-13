@@ -5,10 +5,8 @@
     </a-layout-header>
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
-        <div class="video-grid">
-          <div v-for="(video, index) in videos" :key="index" class="video-container">
-            <video :ref="'video_' + video.user_id" autoplay></video>
-          </div>
+        <div class="video-container">
+          <video ref="video" autoplay></video>
         </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
@@ -36,6 +34,7 @@
 <script>
 import { Layout, Button, Input, Switch } from 'ant-design-vue';
 import io from 'socket.io-client';
+import axios from "axios";
 
 export default {
   components: {
@@ -52,27 +51,38 @@ export default {
       tittle: 'SUSTeh CS303 Online Meeting App',
       messages: [],
       newMessage: '',
-      cameraOn: true,
+      cameraOn: false,
       microphoneOn: true,
       socket: null,
-      videos: [],
     };
   },
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { message: this.newMessage });
+        this.socket.emit('message', { user: 'You', message: this.newMessage });
         this.newMessage = '';
       }
     },
     toggleCamera() {
-      console.log('Camera toggled:', this.cameraOn);
+      axios.post('http://127.0.0.1:5000/api/update-audio-status');
     },
     toggleMicrophone() {
-      console.log('Microphone toggled:', this.microphoneOn);
+      axios.post('http://127.0.0.1:5000/api/update-camera-status');
     },
-    exitMeeting() {
-      console.log('Exiting meeting');
+    async exitMeeting() {
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/quit');
+        if (response.data.status === 'success') {
+          console.log('退出成功:', response.data);
+          this.$router.push('/dashboard');
+        } else {
+          console.error('退出失败:', response.data);
+          alert('退出失败，妮可不让你退出哦');
+        }
+      } catch (error) {
+        console.error('退出失败:', error);
+        alert('退出失败，妮可不让你退出哦');
+      }
     },
     connectToSocket() {
       this.socket = io('http://127.0.0.1:5000');
@@ -80,11 +90,9 @@ export default {
         console.log('WebSocket connected');
       });
       this.socket.on('video_frame', (data) => {
-        const videoElement = this.$refs['video_' + data.user_id];
+        const videoElement = this.$refs.video;
         if (videoElement) {
           videoElement.src = URL.createObjectURL(new Blob([data.frame], { type: 'image/jpeg' }));
-        } else {
-          this.videos.push({ user_id: data.user_id });
         }
       });
       this.socket.on('message', (msg) => {
@@ -116,14 +124,6 @@ export default {
   padding: 10px;
 }
 
-.video-grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 10px;
-}
-
 .video-container {
   position: relative;
   padding-top: 56.25%; /* 16:9 aspect ratio */
@@ -140,7 +140,6 @@ export default {
   width: 100%;
   height: 100%;
 }
-
 
 .controls {
   display: flex;

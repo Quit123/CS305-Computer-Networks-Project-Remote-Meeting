@@ -27,29 +27,7 @@ socketio = SocketIO(app)
 streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
 streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
 
-# def close_audio_streams(self):
-#     if hasattr(self, 'streamin'):
-#         self.streamin.stop_stream()
-#         self.streamin.close()
-#     if hasattr(self, 'streamout'):
-#         self.streamout.stop_stream()
-#         self.streamout.close()
-#     if hasattr(self, 'audio'):
-#         self.audio.terminate()
-# print warning if no available camera
-cap = cv2.VideoCapture(0)
-if cap.isOpened():
-    can_capture_camera = True
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-else:
-    can_capture_camera = False
 
-
-current_screen_size = {'width': 0, 'height': 0}
-# my_screen_size = pyautogui.size()
-
-screen_image = Image.new('RGB', (current_screen_size['width'], current_screen_size['height']), color=(0, 0, 0))
 
 
 def add_user_name_to_sdp(offer_sdp, user_name):
@@ -74,6 +52,18 @@ def parse_client_id_from_offer(offer_sdp):
     else:
         return None, offer_sdp  # 如果没有找到用户名，返回原始的 SDP
 
+cap = cv2.VideoCapture(0)
+if cap.isOpened():
+    can_capture_camera = True
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+else:
+    can_capture_camera = False
+
+
+current_screen_size = {'width': 960, 'height': 960}
+
+# screen_image = Image.new('RGB', (current_screen_size['width'], current_screen_size['height']), color=(0, 0, 0))
 
 def resize_image_to_fit_screen(image, my_screen_size):
     screen_width, screen_height = my_screen_size['width'], my_screen_size['height']
@@ -106,6 +96,7 @@ def overlay_camera_images(screen_image, camera_images):
         print('[Warn]: cannot display when screen and camera are both None')
         return None
     if screen_image is not None:
+        # 通过current_screen_size调用上面的方法返回适合大小的image
         screen_image = resize_image_to_fit_screen(screen_image, current_screen_size)
 
     if camera_images is not None:
@@ -147,23 +138,20 @@ def overlay_camera_images(screen_image, camera_images):
         return screen_image
 
 
+def convert_to_jpeg(screen_image):
+    # 使用 BytesIO 将图像保存为字节流
+    byte_io = BytesIO()
+    screen_image.save(byte_io, format="JPEG")  # 指定保存为JPEG格式
+    image_bytes = byte_io.getvalue()  # 获取字节流（JPEG格式的图像）
+
+    return image_bytes
+
+
 def capture_screen():
     # capture screen with the resolution of display
     # img = pyautogui.screenshot()
     img = ImageGrab.grab()
     return img
-
-
-# def capture_camera():
-#     # capture frame of camera
-#     ret, frame = cap.read()
-#     if not ret:
-#         raise Exception('Fail to capture frame from camera')
-#     return Image.fromarray(frame)
-
-
-# def capture_voice():
-#     return streamin.read(CHUNK)
 
 
 def decompress_image(image_bytes):

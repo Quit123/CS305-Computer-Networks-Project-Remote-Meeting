@@ -49,6 +49,7 @@ def login():
     if "Login successfully" in recv:
         login_info["status"] = True
         client_instance.user_name = username
+        client_instance.data_queues[username] = asyncio.Queue()
         return jsonify({'status': 'success', 'message': 'Login successful'})
     else:
         login_info["status"] = False
@@ -159,8 +160,12 @@ def send_text(msg):
     # server发送的信息需要特殊标识一下
 
     # print(str(msg))
-    send(msg, broadcast=True)
     client_instance = app.config.get('CLIENT_INSTANCE')
+    json_message = {
+        "user": client_instance.user_name,
+        "message": msg['message']
+    }
+    send(json_message)
     """前端通过 POST 请求发送文本消息"""
     #if 'message' in msg:
     client_instance.text = msg['message']
