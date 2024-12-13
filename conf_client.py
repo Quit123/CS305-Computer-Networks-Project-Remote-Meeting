@@ -9,6 +9,7 @@ import asyncio
 from log_register_func import *
 import api
 import threading
+from conf_server import ConferenceServer,MainServer
 
 established_client = None
 
@@ -73,6 +74,34 @@ class ConferenceClient:
         else:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
+        
+    async def create_p2p_conference(self, title_name):
+        """
+        create a conference: send create-conference request to server and obtain necessary data to
+        receive conference id.
+        """
+        new_conference = ConferenceServer(1, title_name)
+        print("[Info]: Creating a new conference...")
+        await new_conference.start()
+
+    async def join_p2p_conference(self, ip):
+        """
+        join a conference: send join-conference request with given conference_id, and obtain necessary data to
+        """
+        print(f"[Info]: Joining conference {ip}...")
+        # 这里用来讲建立交流链接，text，和命令交流
+        try:
+            #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            established_client, info = connection_establish((ip, 8004))
+            await self.sockets['text'] = established_client
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            await sock.connect((self.server_addr[0], 8001))
+            self.sockets[type] = sock
+            print(f"[Info]: Connected to '{ip}' conference.")
+            await self.keep_share()
+        except Exception as e:
+            print(f"[Error]: Could not connect to '{ip}' conference: {e}")
+
 
     async def join_conference(self, conference_id):
         """
@@ -181,10 +210,10 @@ class ConferenceClient:
         # task_list = [asyncio.create_task(receive_text(self)), asyncio.create_task(send_texts(self)),asyncio.create_task(output_data(self, fps_or_frequency))]
         #     await asyncio.wait(task_list)
         await asyncio.gather(receive_text(self),
-                                 send_texts(self, fps_or_frequency),
-                             receive_audio(self, fps_or_frequency),
-                             send_audio(self, fps_or_frequency)
-                             )
+                            send_texts(self, fps_or_frequency),
+                            receive_audio(self, fps_or_frequency),
+                            send_audio(self, fps_or_frequency)
+                            )
                                  # asyncio.create_task(output_data(self, fps_or_frequency)))
 
 
