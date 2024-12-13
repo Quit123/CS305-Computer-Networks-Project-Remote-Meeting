@@ -10,6 +10,7 @@ from aiortc.contrib.media import MediaPlayer, MediaRelay
 from api import app
 from log_register_func import *
 from flask_socketio import SocketIO, emit
+import struct
 
 client_instance = app.config.get('CLIENT_INSTANCE')
 
@@ -29,6 +30,10 @@ async def establish_connect(self):
                 # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 使用 UDP 协议
                 # self.sockets[type] = sock
                 # TCP
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((self.server_addr[0], port))
+                self.sockets[type] = sock
+            if type == 'camera':
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((self.server_addr[0], port))
                 self.sockets[type] = sock
@@ -68,15 +73,6 @@ async def output_data(self, fps_or_frequency):
         running task: output received stream data
         """
     screen_image = None
-    # while self.on_meeting:
-    # 已将audio移除
-    # Example for outputting received data (can be extended to handle all data types)
-    # if not self.data_queues['audio'].empty():
-    #     if not streamout.is_active():
-    #         streamout.start_stream()
-    #     streamout.write(self.data_queues['audio'].get())
-    # else:
-    #     streamout.stop_stream()
     if not self.data_queues['screen'].empty():
         screen_image = decompress_image(self.data_queues['screen'].get())
         screen_image.show()
@@ -94,14 +90,6 @@ async def output_data(self, fps_or_frequency):
         await send_camera_frame_to_frontend(all_user_camera_data)
     if not self.data_queues['text'].empty():
         received_message = self.text_queue.get()
-        # emit('text_message', received_message)
-        #       前端代码
-        #         // 监听服务器发送的 'text_message' 事件
-        #         socket.on('text_message', function(data) {
-        #             console.log('Received message from server:', data);
-        #             // 将接收到的消息显示在网页中
-        #             document.getElementById('message').innerText = data;
-        #         });
         try:
             with open('user_commands.txt', 'a', encoding='utf-8') as f:
                 f.write(received_message)
@@ -134,8 +122,7 @@ async def send_texts(self, fps_or_frequency):
             # self.text_event.clear()  # 重置事件
         await asyncio.sleep(1/fps_or_frequency)
 
-#        client_instance.established_client.send(message.encode("utf-8"))
-#       recv_data = server_response(client_instance.established_client, None).decode("utf-8")
+
 async def receive_text(self, decompress=None):
     loop = asyncio.get_event_loop()
     established_text = self.sockets['text']
@@ -152,18 +139,6 @@ async def receive_text(self, decompress=None):
             print("receive message:", recv_data)
             recv_data = recv_data.decode('utf-8')
         await asyncio.sleep(1)
-    # recv_data = None
-    # print("[Info]: Starting text playback monitoring...")
-    # established_text = self.sockets['text']
-    # # while self.on_meeting:
-    # try:
-    #     recv_data = await asyncio.wait_for(server_response(established_text, None), timeout=1 / 30)
-    # except asyncio.TimeoutError:
-    #     pass
-    # print("pass await")
-    # if recv_data:
-    #     self.data_queues['text'].put_nowait(recv_data.decode("utf-8"))
-    # await asyncio.sleep(0)
 
 
 # 发送音频数据的线程
@@ -171,7 +146,6 @@ async def send_audio(self, fps_or_frequency):
     try:
         streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
         print("run send audio")
-        audio_queue = asyncio.Queue(maxsize=10)  # 限制队列大小
         while self.on_meeting:
             try:
                 data = streamin.read(CHUNK)  # 从麦克风读取音频数据
@@ -179,14 +153,7 @@ async def send_audio(self, fps_or_frequency):
                     print("[Warning]: No audio data received.")
                     continue  # 没有数据时跳过，避免发送空数据
 
-                if audio_queue.full():
-                    print("[Warning]: Audio queue is full, waiting to send.")
-                    await asyncio.sleep(0.1)  # 等待队列有空间
-                await audio_queue.put(data)  # 将数据放入队列
-
-                # 从队列中取出数据并发送
-                audio_data = await audio_queue.get()
-                self.sockets['audio'].sendall(audio_data)  # 通过 socket 发送数据
+                self.sockets['audio'].sendall(data)  # 通过 socket 发送数据
 
             except socket.error as e:
                 print(f"[Error]: Socket error during audio send: {e}")
@@ -195,7 +162,7 @@ async def send_audio(self, fps_or_frequency):
             except Exception as e:
                 print(f"[Error]: Unexpected error during audio send: {e}")
                 break  # 捕获其他异常，退出循环
-            await asyncio.sleep(1 / fps_or_frequency)
+            await asyncio.sleep(1 / (fps_or_frequency * 3))
     except Exception as e:
         print(f"[Error]: Error in send_audio: {e}")
 
@@ -208,33 +175,23 @@ async def receive_audio(self, fps_or_frequency):
         streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
         print("run into audio")
 
-        audio_queue = asyncio.Queue(maxsize=10)  # 控制队列大小
-
         while self.on_meeting:
             try:
                 recv_data = await loop.sock_recv(established_text, 1024)
+                # if isinstance(recv_data, bytes):  # 确保数据是字节类型
+                #     streamout.write(recv_data)
                 streamout.write(recv_data)
 
                 if not self.acting_data_types['audio']:
                     print("[Warning]: Connection closed by server")
                     break  # 连接被关闭，退出循环
 
-                if audio_queue.full():
-                    print("[Warning]: Audio queue is full, waiting to process.")
-                    await asyncio.sleep(0.1)  # 等待队列有空间
-
-                await audio_queue.put(recv_data)  # 将数据放入队列
-
-                # 从队列中取出数据并播放
-                audio_data = await audio_queue.get()
-                streamout.write(audio_data)  # 播放接收到的音频数据
-
                 print("Received audio data")
                 # 处理数据...
             except ConnectionAbortedError as e:
                 print(f"[Error]: Connection aborted: {e}")
                 break
-            await asyncio.sleep(1/fps_or_frequency)
+            # await asyncio.sleep(1/fps_or_frequency)
     except Exception as e:
         print(f"[Error]: An error occurred in receive_audio: {e}")
         # print("receive audio")
@@ -296,39 +253,139 @@ async def receive_audio(self, fps_or_frequency):
     #         print(f"Error sending camera image: {e}")
     #     await asyncio.sleep(0)
 
+# # open
+# cap = cv2.VideoCapture(0)
+# if cap.isOpened():
+#     can_capture_camera = True
+#     cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+#     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+# else:
+#     can_capture_camera = False
+# # close
+# cap.release()
 
-async def send_camera(self):
+async def send_camera(self, fps_or_frequency):
     """Capture, compress, and send camera image to the server."""
     cap = cv2.VideoCapture(0)
-    # 创建 RTP 连接
-    pc = RTCPeerConnection()
-    relay = MediaRelay()
-    # 创建 CameraStreamTrack 实例
-    track = CameraStreamTrack(cap)
-    pc.addTrack(track)
-    # 进行 WebRTC 信令交换，生成 offer 和设置本地描述
-    offer = await pc.createOffer()
-    offer.sdp = add_user_name_to_sdp(offer.sdp, self.user_name)
-    await pc.setLocalDescription(offer)
-    # 在实际应用中，需要通过信令交换将 offer 发给远程端，获取远程端的 answer
-    print("Offer created and local description set. Now awaiting connection...")
-    # 维持连接，持续发送视频
-    await asyncio.sleep(3600)  # 1小时后关闭连接
-    # 清理工作
-    await pc.close()
-    cap.release()
+    while self.on_meeting:
+        if self.acting_data_types['camera']:
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(0)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+            try:
+                await asyncio.sleep(1 / fps_or_frequency * 3)
+
+                camera_images = []
+                screen_image = None
+                for user_id, queue in self.data_queues.items():
+                    if not queue.empty():
+                        if user_id == self.user_name:
+                            screen_image = queue.get()
+                        image_bytes = await queue.get()  # 异步获取图像字节流
+                        pil_image = decompress_image(image_bytes)  # 解压字节流为 PIL.Image
+                        camera_images.append(pil_image)  # 将 PIL.Image 添加到 camera_images 列表
+                screen = overlay_camera_images(screen_image, camera_images)
+                # 假设 screen_image 是 PIL.Image 类型
+                screen_image_np = np.array(screen)  # 将 PIL.Image 转换为 numpy.ndarray
+                # 如果需要，将其从 RGB 转换为 BGR（因为 OpenCV 使用 BGR）
+                frame = cv2.cvtColor(screen_image_np, cv2.COLOR_RGB2BGR)  # 转换为 BGR 格式以便 OpenCV 使用
+                cv2.imshow('camera', frame)
+
+                ret, frame = cap.read()  # 获取图像
+                if ret:
+                    message = None
+                    # cv2.imshow("Camera", frame)  # 显示图像
+                    # cv2.waitKey(0)  # 按任意键关闭显示窗口
+                    pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    byte_io = BytesIO()
+                    pil_image.save(byte_io, format='JPEG')  # 或者 'PNG'，根据需要选择格式
+                    image_bytes = byte_io.getvalue()  # 获取字节流
+
+                    # 自己image放入queue
+                    image = decompress_image(image_bytes)
+                    self.data_queues[self.user_name].put(image)
+
+                    head_bytes = "head".encode('utf-8')  # len(head_byte) = 4
+                    message += head_bytes
+
+                    user_bytes = self.user_name.encode('utf-8')
+                    message += user_bytes + b'\0' * (16 - len(user_bytes))  # 前16个字节
+
+                    image_length_bytes = struct.pack('!I', len(image_bytes))
+                    message += image_length_bytes
+
+                    message += image_bytes
+
+                    self.sockets['camera'].sendall(image_bytes)
+            except ConnectionAbortedError as e:
+                print(f"[Error]: Connection aborted: {e}")
+        else:
+            cap.release()
+
+
+    # cap = cv2.VideoCapture(0)
+    # # 创建 RTP 连接
+    # pc = RTCPeerConnection()
+    # relay = MediaRelay()
+    # # 创建 CameraStreamTrack 实例
+    # track = CameraStreamTrack(cap)
+    # pc.addTrack(track)
+    # # 进行 WebRTC 信令交换，生成 offer 和设置本地描述
+    # offer = await pc.createOffer()
+    # offer.sdp = add_user_name_to_sdp(offer.sdp, self.user_name)
+    # await pc.setLocalDescription(offer)
+    # # 在实际应用中，需要通过信令交换将 offer 发给远程端，获取远程端的 answer
+    # print("Offer created and local description set. Now awaiting connection...")
+    # # 维持连接，持续发送视频
+    # await asyncio.sleep(3600)  # 1小时后关闭连接
+    # # 清理工作
+    # await pc.close()
+    # cap.release()
 
 
 async def receive_camera(self, decompress=None):
     print("[Info]: Starting camera playback monitoring...")
-    sock = self.sockets['camera']
+    loop = asyncio.get_event_loop()
+    established_camera = self.sockets['camera']
     while self.on_meeting:
-        data, _ = await asyncio.get_event_loop().sock_recv(sock, 1500)  # 1500 是 RTP 包的最大大小
-        decoded_data = data.decode('utf-8')  # 解码为字符串
-        message = json.loads(decoded_data)  # 将 JSON 字符串转换回字典
-        user_name = message['user_name']  # 获取用户名
-        compressed_image = message['image']  # 获取图像数据
-        self.data_queues['camera'][user_name].put_nowait(compressed_image)
+        if not established_camera:
+            print("[info]: camera 初始化失败")
+        # recv_data = None
+        # recv_data = await loop.sock_recv(established_camera, 1024)
+        head_bytes = b""
+        while len(head_bytes) < 4:
+            byte = await loop.sock_recv(established_camera, 1)
+            if len(head_bytes) == 0 and byte == b"h":
+                head_bytes += byte
+            else:
+                head_bytes = b""
+            if len(head_bytes) == 1 and byte == b"e":
+                head_bytes += byte
+            else:
+                head_bytes = b""
+            if len(head_bytes) == 2 and byte == b"a":
+                head_bytes += byte
+            else:
+                head_bytes = b""
+            if len(head_bytes) == 3 and byte == b"d":
+                head_bytes += byte
+            else:
+                head_bytes = b""
+
+        user_bytes = await loop.sock_recv(established_camera, 16)
+        user = user_bytes.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
+
+        if user not in self.camera_queues:
+            self.data_queues[user] = asyncio.Queue()
+
+        image_length_bytes = await loop.sock_recv(established_camera, 4)
+        image_length = struct.unpack('!I', image_length_bytes)[0]  # 解包得到图像的字节长度
+
+        image_bytes = await loop.sock_recv(established_camera, image_length)
+
+        image = decompress_image(image_bytes)
+        self.data_queues[user].put(image)
 
 
 async def ask_new_clients_and_share_screen(self):

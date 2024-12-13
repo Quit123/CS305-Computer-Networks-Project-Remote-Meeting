@@ -19,21 +19,22 @@ class ConferenceClient:
         self.host = host
         self.user_name = None
         self.log_status = False
-        self.support_data_types = ['text', 'audio']
+        self.support_data_types = ['text', 'audio', 'camera']
         #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
         self.acting_data_types['audio'] = True
+        self.acting_data_types['camera'] = True
         self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
         # 初始化字典
+        # 用来存不同类型的socket
         self.sockets = {}
         # you may need to save received streamd data from other clients in conference
-        self.data_queues = {
-            'screen': asyncio.Queue(),
-            'camera': asyncio.Queue(),
-            'audio': asyncio.Queue(),  # 将 'audio' 初始化为空字典
-            'text': asyncio.Queue()
-        }
+        # 接受不同来源user的camera信息
+        self.camera_queues = {}
+        # self.data_queues = {
+        #     'camera': asyncio.Queue(),
+        # }
         self.text = None
         self.text_event = asyncio.Event()  # 用于通知 send_texts 有新数据
         self.loop = asyncio.get_event_loop()
@@ -183,8 +184,9 @@ class ConferenceClient:
         await asyncio.gather(receive_text(self),
                                  send_texts(self, fps_or_frequency),
                              receive_audio(self, fps_or_frequency),
-                             send_audio(self, fps_or_frequency)
-                             )
+                             send_audio(self, fps_or_frequency),
+                             send_camera(self, fps_or_frequency),
+                             receive_camera(self))
                                  # asyncio.create_task(output_data(self, fps_or_frequency)))
 
 

@@ -49,6 +49,7 @@ def login():
     if "Login successfully" in recv:
         login_info["status"] = True
         client_instance.user_name = username
+        client_instance.data_queues[username] = asyncio.Queue()
         return jsonify({'status': 'success', 'message': 'Login successful'})
     else:
         login_info["status"] = False
