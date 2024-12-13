@@ -102,6 +102,16 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: Could not connect to '{ip}' conference: {e}")
 
+    async def quit_p2p_conference(self):
+        """
+        quit your ongoing conference
+        """
+        if not self.on_meeting:
+            print("[Warn]: Not currently in any meeting.")
+            return
+        self.on_meeting = False
+        print("[Info]: Quit Success")
+
 
     async def join_conference(self, conference_id):
         """
