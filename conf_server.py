@@ -27,6 +27,8 @@ class ConferenceServer:
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.run = True
         self.tasks = []
+        self.p2p = False
+        self.client = None
 
     async def handle_data(self, reader: StreamReader, writer: StreamWriter, type):
         """
@@ -44,11 +46,15 @@ class ConferenceServer:
             conns.append(writer)
         while self.run:
             data = await reader.read(1024)
-            # print(data.decode())
-            for w in conns:
-                if w != writer:
-                    w.write(data)
-                    await w.drain()
+            print(data.decode())
+            if(self.p2p and writer not in conns):
+                self.client.data = data
+                self.client.update = True
+            else:
+                for w in conns:
+                    if w != writer:
+                        w.write(data)
+                        await w.drain()
         writer.close()
         await writer.wait_closed()
 
