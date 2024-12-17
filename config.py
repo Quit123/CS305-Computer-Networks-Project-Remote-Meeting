@@ -5,7 +5,7 @@ HELP = 'Create         : create an conference\n' \
 
 
 
-SERVER_IP = '10.32.167.35'
+SERVER_IP = '10.32.111.112'
 MAIN_SERVER_PORT = 9000
 TIMEOUT_SERVER = 5
 # DGRAM_SIZE = 1500  # UDP

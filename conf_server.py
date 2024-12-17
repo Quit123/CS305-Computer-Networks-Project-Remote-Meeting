@@ -44,7 +44,8 @@ class ConferenceServer:
             conns.append(writer)
         while self.run:
             data = await reader.read(1024)
-            # print(data.decode())
+            if type == 'text':
+                print(data.decode())
             for w in conns:
                 if w != writer:
                     w.write(data)
@@ -123,12 +124,14 @@ class ConferenceServer:
     #     async with server:
     #         await server.serve_forever()
 
+
     async def build(self):
         print("testb1")
-        self.audio_server, self.screen_server, self.camera_server, self.text_server = (
+        self.audio_server,self.screen_server, self.camera_server, self.text_server = (
+            #await self.create_udp_server(8001),
             await asyncio.start_server(lambda r, w: self.handle_data(r, w, "audio"), '10.32.111.112', 8001),
             await asyncio.start_server(lambda r, w: self.handle_data(r, w, "screen"), '10.32.111.112', 8002),
-            await asyncio.start_server(lambda r, w: self.handle_data(r, w, "screen"), '10.32.111.112', 8003),
+            await asyncio.start_server(lambda r, w: self.handle_data(r, w, "camera"), '10.32.111.112', 8003),
             await asyncio.start_server(lambda r, w: self.handle_data(r, w, "text"), '10.32.111.112', 8004),
             # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[0]),
             # await asyncio.start_server(lambda r, w: self.handle_data(r, w), '10.32.111.112', self.data_server_port[1]),
@@ -147,6 +150,7 @@ class ConferenceServer:
         # 并发运行服务器
         print("testb3")
         await asyncio.gather(
+            #self.UDP_server(),
             self.audio_server.serve_forever(),
             self.screen_server.serve_forever(),
             self.camera_server.serve_forever(),
@@ -199,7 +203,7 @@ class MainServer:
         new_conference = ConferenceServer(conference_id, title)  # 创建新会议服务器
         self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
         self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
-        self.reverse_conference_manager[(writer,reader)] = conference_id
+        self.reverse_conference_manager[(writer, reader)] = conference_id
         print("test1")
         task = asyncio.create_task(new_conference.start())
         self.manage_task[conference_id] = task
@@ -299,9 +303,6 @@ class MainServer:
                         await self.handle_join_conference(reader, writer, conference_id, message)
                     elif opera.startswith('QUIT'):
                         await self.handle_quit_conference(reader, writer, message)
-                    elif opera.startswith('CANCEL'):
-                        conference_id = opera.split()[1]
-                        await self.handle_cancel_conference(reader, writer, conference_id, message)
                 else:
                     cmd = message.split(' ')
                     if cmd[0] == 'login':
