@@ -194,6 +194,7 @@ class MainServer:
         self.reverse_conference_manager = {}  # conference_manager的反向映射
         self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
         self.manage_task = {}
+        self.P2P_manager={}  # P2P会议管理保存(会议号，会议创建人)
         self.ports = [8001, 8002, 8003, 8004]
 
     async def handle_creat_conference(self, writer, reader, title):
@@ -299,10 +300,12 @@ class MainServer:
                 if message.startswith('[COMMAND]:'):
                     print('here:' + message)
                     opera = message.split(' ')[1]
-
                     if opera.startswith('Create'):
                         title = message.split(' ')[-2]
-                        await self.handle_creat_conference(writer, reader, title)
+                        if message.split(' ')[2] == 'P2P':
+                            self.P2P_manager[title] = client_address[0]
+                        else:
+                            await self.handle_creat_conference(writer, reader, title)
                     elif opera.startswith('JOIN'):
                         conference_id = message.split()[2]
                         await self.handle_join_conference(reader, writer, conference_id, message)
