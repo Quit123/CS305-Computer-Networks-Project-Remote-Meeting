@@ -50,6 +50,8 @@ class ConferenceClient:
         self.cancel_event = asyncio.Event()
         self.join_event = asyncio.Event()
         self.established_client = None
+        self.data = None
+        self.update = False
 
     async def create_conference(self, title_name):
         """
@@ -83,6 +85,7 @@ class ConferenceClient:
         """
         new_conference = ConferenceServer(1, title_name)
         print("[Info]: Creating a p2p conference...")
+        new_conference.client = self
         await new_conference.start()
 
     async def join_p2p_conference(self, ip):
