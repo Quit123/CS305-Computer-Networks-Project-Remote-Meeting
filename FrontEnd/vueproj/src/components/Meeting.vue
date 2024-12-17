@@ -51,7 +51,7 @@ export default {
       tittle: 'SUSTeh CS303 Online Meeting App',
       messages: [],
       newMessage: '',
-      cameraOn: false,
+      cameraOn: true,
       microphoneOn: true,
       socket: null,
     };
