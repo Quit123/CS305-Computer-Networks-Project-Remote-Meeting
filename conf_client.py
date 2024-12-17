@@ -195,9 +195,9 @@ class ConferenceClient:
         recv_text_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_text_thread.start()
 
-        recv_camera_thread = threading.Thread(target=self.receive_camera)
-        recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        recv_camera_thread.start()
+        # recv_camera_thread = threading.Thread(target=self.receive_camera)
+        # recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        # recv_camera_thread.start()
 
     def send_texts(self, fps_or_frequency):
         print("run send text")
