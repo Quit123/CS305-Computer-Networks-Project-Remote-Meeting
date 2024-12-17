@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, send
 import asyncio
 import util
+import queue
 from log_register_func import *
 from flask_cors import CORS
 
@@ -23,16 +24,6 @@ join_info = {
     "click": False
 }
 
-
-# @app.route('/api/init', methods=['POST'])
-# def init():
-#     """Handle POST request for user login"""
-#     global established_client
-#     client1 = ConferenceClient()
-#     established_client, info = connection_establish(client1.server_addr)
-#     app.config['CLIENT_INSTANCE'] = client1
-#     app.run(debug=False)
-
 # 具体功能之后完善
 
 @app.route('/api/login', methods=['POST'])
@@ -49,7 +40,8 @@ def login():
     if "Login successfully" in recv:
         login_info["status"] = True
         client_instance.user_name = username
-        client_instance.data_queues[username] = asyncio.Queue()
+        client_instance.camera_queues[username] = queue.Queue()
+        client_instance.camera_last[username] = None
         return jsonify({'status': 'success', 'message': 'Login successful'})
     else:
         login_info["status"] = False
@@ -104,16 +96,6 @@ async def Join():
     print(con_id)
     con_id = con_id + " " + client_instance.user_name
     await client_instance.join_conference(con_id)
-    # if username in users and users[username] == password:
-    # error = 0
-    # while not client_instance.on_meeting:
-    #     if "Error" in ans:
-    #         error = 1
-    #         break
-    # if error == 0:
-    #     return jsonify({'status': 'success', 'message': ans})
-    # else:
-    #     return jsonify({'status': 'fail', 'message': ans})
 
 
 @app.route('/api/quit', methods=['POST'])
@@ -167,33 +149,14 @@ def send_text(msg):
     }
     send(json_message)
     """前端通过 POST 请求发送文本消息"""
-    #if 'message' in msg:
     client_instance.text = msg['message']
     print("client_instance.text:", client_instance.text)
-    client_instance.text_event.set()
-
-    # return jsonify({'status': 'success', 'message': client_instance.text})
-    #return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
-    #client_instance = app.config.get('CLIENT_INSTANCE')
 
 
 @socketio.on('me')
 def rev_text(msg):
     send(msg, broadcast=True)
     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
-
-
-# @app.route('/api/send', methods=['POST'])
-# def send_text():
-#     client_instance = app.config.get('CLIENT_INSTANCE')
-#     """前端通过 POST 请求发送文本消息"""
-#     data = request.json
-#     if 'message' in data:
-#         client_instance.text = data['message']
-#         client_instance.text_event.set()
-#         return jsonify({'status': 'success', 'message': client_instance.text})
-#     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
-
 
 @app.route('/api/box-size', methods=['POST'])
 def update_screen_size():

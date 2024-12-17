@@ -52,13 +52,13 @@ def parse_client_id_from_offer(offer_sdp):
     else:
         return None, offer_sdp  # 如果没有找到用户名，返回原始的 SDP
 
-cap = cv2.VideoCapture(0)
-if cap.isOpened():
-    can_capture_camera = True
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-else:
-    can_capture_camera = False
+# cap = cv2.VideoCapture(0)
+# if cap.isOpened():
+#     can_capture_camera = True
+#     cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+#     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+# else:
+#     can_capture_camera = False
 
 
 current_screen_size = {'width': 960, 'height': 960}
@@ -66,25 +66,28 @@ current_screen_size = {'width': 960, 'height': 960}
 # screen_image = Image.new('RGB', (current_screen_size['width'], current_screen_size['height']), color=(0, 0, 0))
 
 def resize_image_to_fit_screen(image, my_screen_size):
-    screen_width, screen_height = my_screen_size['width'], my_screen_size['height']
+    if isinstance(image, Image.Image):
+        screen_width, screen_height = my_screen_size['width'], my_screen_size['height']
 
-    original_width, original_height = image.size
+        original_width, original_height = image.size
 
-    aspect_ratio = original_width / original_height
+        aspect_ratio = original_width / original_height
 
-    if screen_width / screen_height > aspect_ratio:
-        # resize according to height
-        new_height = screen_height
-        new_width = int(new_height * aspect_ratio)
+        if screen_width / screen_height > aspect_ratio:
+            # resize according to height
+            new_height = screen_height
+            new_width = int(new_height * aspect_ratio)
+        else:
+            # resize according to width
+            new_width = screen_width
+            new_height = int(new_width / aspect_ratio)
+
+        # resize the image
+        resized_image = image.resize((new_width, new_height), Image.LANCZOS)
+
+        return resized_image
     else:
-        # resize according to width
-        new_width = screen_width
-        new_height = int(new_width / aspect_ratio)
-
-    # resize the image
-    resized_image = image.resize((new_width, new_height), Image.LANCZOS)
-
-    return resized_image
+        raise ValueError("Provided image is not a valid PIL Image object")
 
 
 def overlay_camera_images(screen_image, camera_images):
