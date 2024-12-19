@@ -64,10 +64,10 @@ export default {
       }
     },
     toggleCamera() {
-      axios.post('http://127.0.0.1:5000/api/update-audio-status');
+      axios.post('http://127.0.0.1:5000/api/update-camera-status');
     },
     toggleMicrophone() {
-      axios.post('http://127.0.0.1:5000/api/update-camera-status');
+      axios.post('http://127.0.0.1:5000/api/update-audio-status');
     },
     async exitMeeting() {
       try {

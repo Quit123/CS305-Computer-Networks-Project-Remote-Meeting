@@ -10,20 +10,20 @@
     <a-row gutter="16" class="dashboard-grid">
       <a-col span="8">
         <a-card title="创建会议" class="hover-card" @mouseenter="hoverEnter" @mouseleave="hoverLeave">
-          <p>快速创建一个新会议。</p>
+          <p>选择创建会议类型。</p>
           <a-button type="primary" block @click="showCreateMeeting" class="hover-button">创建会议</a-button>
         </a-card>
       </a-col>
       <a-col span="8">
-        <a-card title="加入会议" class="hover-card">
-          <p>通过会议号加入会议。</p>
-          <a-button type="primary" block @click="showJoinMeeting" class="hover-button">加入会议</a-button>
+        <a-card title="加入多人会议" class="hover-card">
+          <p>通过会议号加入多人会议。</p>
+          <a-button type="primary" block @click="showJoinMeeting" class="hover-button">加入多人会议</a-button>
         </a-card>
       </a-col>
       <a-col span="8">
-        <a-card title="最近会议" class="hover-card">
-          <p>查看最近参加的会议。</p>
-          <a-button type="default" block @click="viewRecent" class="hover-button">查看会议</a-button>
+        <a-card title="加入简单会议" class="hover-card">
+          <p>通过会议列表加入简单会议。</p>
+          <a-button type="primary" block @click="showJoinSimpleMeeting" class="hover-button">加入简单会议</a-button>
         </a-card>
       </a-col>
     </a-row>
@@ -38,7 +38,7 @@
         ok-text="创建"
         cancel-text="取消"
     >
-     <a-form>
+      <a-form>
         <!-- 主题 -->
         <a-form-item
             label="主题："
@@ -49,7 +49,19 @@
           <a-input v-model:value="meeting.title" placeholder="请输入会议主题" />
         </a-form-item>
 
-<!--        &lt;!&ndash; 提交按钮 &ndash;&gt;-->
+        <!-- 会议类型选择 -->
+        <a-form-item
+            label="会议类型："
+            :label-col="{ span: 5 }"
+            :wrapper-col="{ span: 19 }"
+        >
+          <a-radio-group v-model:value="meeting.type">
+            <a-radio value="simple">简单会议</a-radio>
+            <a-radio value="multi">多人会议</a-radio>
+          </a-radio-group>
+        </a-form-item>
+
+        <!-- 提交按钮 -->
         <a-form-item :wrapper-col="{ span: 19, offset: 5 }">
           <a-button type="primary" block @click="createMeeting">
             创建会议
@@ -58,10 +70,10 @@
       </a-form>
     </a-modal>
 
-    <!-- 加入会议模态框 -->
+    <!-- 加入多人会议模态框 -->
     <a-modal
         v-model:visible="isJoinMeetingVisible"
-        title="加入会议"
+        title="加入多人会议"
         :footer="null"
         centered
         @cancel="resetJoinForm"
@@ -88,6 +100,27 @@
       </a-form>
     </a-modal>
 
+    <!-- 加入简单会议模态框 -->
+    <a-modal
+        v-model:visible="isJoinSimpleMeetingVisible"
+        title="加入简单会议"
+        :footer="null"
+        centered
+        @cancel="resetJoinForm"
+        ok-text="加入"
+        cancel-text="取消"
+    >
+      <a-list
+          bordered
+          dataSource="simpleMeetings"
+          renderItem="item => (
+          <a-list-item @click='joinSimpleMeeting(item.id)'>
+            {item.title}
+          </a-list-item>
+        )"
+      />
+    </a-modal>
+
   </div>
 </template>
 
@@ -105,18 +138,18 @@ export default {
     return {
       isCreateMeetingVisible: false,
       isJoinMeetingVisible: false,
+      isJoinSimpleMeetingVisible: false,
       joinMeetingId: "",
+      simpleMeetings: [],
       meeting: {
         title: "",
+        type: "",
       },
       user_id: this.getUsername,
       currentDate: new Date().toLocaleDateString(),
     };
   },
   methods: {
-    viewRecent() {
-      console.log('查看最近会议');
-    },
     hoverEnter(event) {
       const card = event.currentTarget;
       card.style.transform = "scale(1.05)";
@@ -128,60 +161,102 @@ export default {
       card.style.boxShadow = "none";
     },
     showCreateMeeting() {
-      console.log("showCreateMeeting")
       this.isCreateMeetingVisible = true;
     },
     async createMeeting() {
       if (!this.meeting.title) {
-        console.log(this.meeting.title)
         return message.error("请填写会议主题！");
       }
 
-      try {
-        const response = await axios.post('http://127.0.0.1:5000/api/create', {
-          title: this.meeting.title,
-        });
-        if (response.data.status === 'success') {
-          message.success("会议创建成功！");
-          this.joinMeetingId = response.data.message;
-          this.resetForm();
-          this.joinMeeting();
-        } else {
-          message.error("会议创建失败：" + response.data.message);
+      if (this.meeting.type === 'simple') {
+        try {
+          const response = await axios.post('http://127.0.0.1:5000/api/create-simple', {
+            title: this.meeting.title,
+          });
+          if (response.data.status === 'success') {
+            message.success("简单会议创建成功！");
+            this.resetForm();
+          } else {
+            message.error("简单会议创建失败：" + response.data.message);
+          }
+        } catch (error) {
+          message.error("简单会议创建失败：" + error.message);
         }
-      } catch (error) {
-        message.error("会议创建失败：" + error.message);
+      }
+
+      if (this.meeting.type === 'multi') {
+        try {
+          const response = await axios.post('http://127.0.0.1:5000/api/create-multi', {
+            title: this.meeting.title,
+          });
+          if (response.data.status === 'success') {
+            message.success("多人会议创建成功！");
+            this.resetForm();
+          } else {
+            message.error("多人会议创建失败：" + response.data.message);
+          }
+        } catch (error) {
+          message.error("多人会议创建失败：" + error.message);
+        }
+      }
+      else {
+        message.error("请选择会议类型！");
       }
     },
     resetForm() {
       this.meeting = {
         title: "",
+        type: "",
       };
       this.isCreateMeetingVisible = false;
     },
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
+    async showJoinSimpleMeeting() {
+      // try {
+      //   const response = await axios.get('http://127.0.0.1:5000/api/simple-meetings');
+      //   this.simpleMeetings = response.data.meetings;
+      //   this.isJoinSimpleMeetingVisible = true;
+      // } catch (error) {
+      //   message.error("获取简单会议列表失败：" + error.message);
+      // }
+    },
     joinMeeting() {
       if (!this.joinMeetingId) {
         return message.error("请输入会议号！");
       }
       try {
-        axios.post('http://127.0.0.1:5000/api/join', {
+        axios.post('http://127.0.0.1:5000/api/join-multi', {
           con_id: this.joinMeetingId,
         });
         this.resetJoinForm();
         setTimeout(() => {
-          message.success("加入会议成功！");
+          message.success("加入多人会议成功！");
           this.$router.push('/meeting');
         }, 1000);
       } catch (error) {
-        message.error("加入会议失败：" + error.message);
+        message.error("加入多人会议失败：" + error.message);
+      }
+    },
+    joinSimpleMeeting(meetingId) {
+      try {
+        axios.post('http://127.0.0.1:5000/api/join-simple', {
+          con_id: meetingId,
+        });
+        this.resetJoinForm();
+        setTimeout(() => {
+          message.success("加入简单会议成功！");
+          this.$router.push('/meeting');
+        }, 1000);
+      } catch (error) {
+        message.error("加入简单会议失败：" + error.message);
       }
     },
     resetJoinForm() {
       this.joinMeetingId = "";
       this.isJoinMeetingVisible = false;
+      this.isJoinSimpleMeetingVisible = false;
     },
   },
 };
@@ -200,6 +275,7 @@ export default {
   border-radius: 8px;
   cursor: pointer;
 }
+
 .hover-card:hover {
   transform: scale(1.05);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
