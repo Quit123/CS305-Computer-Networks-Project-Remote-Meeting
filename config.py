@@ -10,9 +10,10 @@ TIMEOUT_SERVER = 5
 # DGRAM_SIZE = 1500  # UDP
 LOG_INTERVAL = 2
 
-CHUNK = 1024
+CHUNK = 10240
 CHANNELS = 1  # Channels for audio capture
 RATE = 44100  # Sampling rate for audio capture
+BUFF_SIZE = 65536
 
 camera_width, camera_height = 480, 480  # resolution for camera capture
 

@@ -10,34 +10,40 @@ from log_register_func import *
 client_instance = app.config.get('CLIENT_INSTANCE')
 
 
-async def establish_connect(self):
+def establish_connect(self):
     try:
         for type in self.support_data_types:
             port = self.ports.get(type)
             print("port:", port)
             if type == 'text':
-                #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                established_client, info = connection_establish((self.server_addr[0], port))
-                print("建立status：", info)
-                self.sockets[type] = established_client
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.bind(('0.0.0.0', port))  # 绑定到本地地址和端口
+                #established_client, info = connection_establish((self.server_addr[0], port))
+                self.sockets[type] = sock
             if type == 'audio':
                 # 尝试UDP
-                # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 使用 UDP 协议
-                # self.sockets[type] = sock
+                BUFF_SIZE = 65536
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 使用 UDP 协议
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BUFF_SIZE)
+                sock.bind(('0.0.0.0', port))  # 绑定到本地地址和端口
+                self.sockets[type] = sock
                 # TCP
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((self.server_addr[0], port))
-                self.sockets[type] = sock
+                # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # sock.connect((self.server_addr[0], port))
+                # self.sockets[type] = sock
             if type == 'camera':
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((self.server_addr[0], port))
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.bind(('0.0.0.0', port))
                 self.sockets[type] = sock
+                # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # sock.connect((self.server_addr[0], port))
+                # self.sockets[type] = sock
         print(f"[Info]: Connected to '{self.server_addr[0]}' server.")
     except Exception as e:
         print(f"[Error]: Could not connect to '{self.server_addr[0]}' server: {e}")
 
 
-async def close_connection(self):
+def close_connection(self):
     """
         Close the persistent connection to the server.
         """
@@ -47,14 +53,14 @@ async def close_connection(self):
     print("[Info]: Connection closed with the server.")
 
 
-async def send_camera_frame_to_frontend(camera_images):
+def send_camera_frame_to_frontend(camera_images):
     """
     Send camera frame to the frontend via API
     """
     try:
         url = 'http://localhost:5000/api/receive_camera_frame'
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=camera_images) as response:
+        with aiohttp.ClientSession() as session:
+            with session.post(url, json=camera_images) as response:
                 if response.status == 200:
                     print("Frame successfully sent to frontend.")
                 else:
@@ -63,7 +69,7 @@ async def send_camera_frame_to_frontend(camera_images):
         print(f"Failed to send camera frame to frontend: {e}")
 
 
-async def output_data(self, fps_or_frequency):
+def output_data(self, fps_or_frequency):
     """
         running task: output received stream data
         """
@@ -82,7 +88,7 @@ async def output_data(self, fps_or_frequency):
                     'username': username,
                     'camera_image': base64.b64encode(camera_image).decode('utf-8')
                 })
-        await send_camera_frame_to_frontend(all_user_camera_data)
+        send_camera_frame_to_frontend(all_user_camera_data)
     if not self.data_queues['text'].empty():
         received_message = self.text_queue.get()
         try:
@@ -91,14 +97,11 @@ async def output_data(self, fps_or_frequency):
         except Exception as e:
             print(f"upload entry error: {e}")
 
-    await asyncio.sleep(1 / fps_or_frequency)
 
-
-async def ask_new_clients_and_share_screen(self):
+def ask_new_clients_and_share_screen(self):
     """向服务器询问是否有新客户端加入会议"""
     try:
         while self.on_meeting:
-            await asyncio.sleep(1)
             num = len(self.data_queues['audio'])
             inquire = f"[ASK]: New client connect ?\n[STATUS]: {num} \n[ASK]: Can I sharing ?"
             check = self.send_request(inquire)
@@ -128,14 +131,13 @@ class CameraStreamTrack(VideoStreamTrack):
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
 
-    async def recv(self):
+    def recv(self):
         if client_instance.acting_data_types['camera']:
             ret, frame = self.cap.read()  # 获取视频帧
             if not ret:
                 raise Exception("Cannot read frame")
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             frame_bytes = self.compress_image(pil_image)
-            await asyncio.sleep(1 / 30)
             return frame_bytes
 
     @staticmethod

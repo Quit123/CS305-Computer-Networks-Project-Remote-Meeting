@@ -52,7 +52,7 @@ export default {
       messages: [],
       newMessage: '',
       cameraOn: true,
-      microphoneOn: true,
+      microphoneOn: false,
       socket: null,
     };
   },

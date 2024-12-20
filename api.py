@@ -65,7 +65,7 @@ def register():
 
 
 @app.route('/api/create', methods=['POST'])
-async def Create():
+def Create():
     print("click Create")
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
@@ -74,7 +74,7 @@ async def Create():
     data = request.json
     title = data.get('title')
     title = title + " " + client_instance.user_name
-    ans, con_id = await client_instance.create_conference(title)
+    ans, con_id = client_instance.create_conference(title)
     error = 0
     if "Error" in ans:
         error = 1
@@ -87,7 +87,7 @@ async def Create():
 
 
 @app.route('/api/join', methods=['POST'])
-async def Join():
+def Join():
     print("click Join")
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
@@ -95,7 +95,7 @@ async def Join():
     con_id = con_in['con_id']
     print(con_id)
     con_id = con_id + " " + client_instance.user_name
-    await client_instance.join_conference(con_id)
+    client_instance.join_conference(con_id)
 
 
 @app.route('/api/quit', methods=['POST'])
