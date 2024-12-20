@@ -24,19 +24,28 @@ class ConferenceClient:
         #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
-        self.acting_data_types['audio'] = True
+        self.acting_data_types['audio'] = False
         self.acting_data_types['camera'] = True
-        self.ports = {'audio': 8001, 'screen': 8002, 'camera': 8003, 'text': 8004}
+        self.ports = {'audio': 0, 'screen': 0, 'camera': 0, 'text': 0}
         # 用来存不同类型的socket
         self.sockets = {}
         self.camera_queues = {}
         self.camera_last = {}
+        self.camera_threads = {}  # 存储每个成员对应的线程
         self.text = None
         self.can_share_screen = True
         self.conference_info = None  # you may need to save and update some conference_info regularly
         self.established_client = None
         self.frame = None
         self.cap = None
+
+    def set_ports(self, response):
+        port_num = int(response.split()[-1])
+        self.ports['audio'] = port_num
+        self.ports['screen'] = port_num + 1
+        self.ports['camera'] = port_num + 2
+        print("camera port:", self.ports['camera'])
+        self.ports['text'] = port_num + 3
 
     def create_conference(self, title_name):
         """
@@ -53,6 +62,7 @@ class ConferenceClient:
         if "SUCCESS" in response:
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
+            self.set_ports(response)
             self.on_meeting = True
             # await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
@@ -73,6 +83,8 @@ class ConferenceClient:
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = self.send_request(request_data)
         if "SUCCESS" in response:
+            if self.ports['audio'] == 0:
+                self.set_ports(response)
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
@@ -162,27 +174,17 @@ class ConferenceClient:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
         self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
 
-        recv_audio_thread = threading.Thread(target=self.receive_audio)
-        recv_audio_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        recv_audio_thread.start()
-
-        send_text_thread = threading.Thread(target=self.send_texts)
-        send_text_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        send_text_thread.start()
+        self.send_info()
 
         recv_text_thread = threading.Thread(target=self.receive_text)
         recv_text_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_text_thread.start()
 
-        send_audio_thread = threading.Thread(target=self.send_audio)
-        send_audio_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        send_audio_thread.start()
+        recv_audio_thread = threading.Thread(target=self.receive_audio)
+        recv_audio_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        recv_audio_thread.start()
 
-        send_camera_thread = threading.Thread(target=self.send_camera)
-        send_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        send_camera_thread.start()
-
-        recv_camera_thread = threading.Thread(target=self.receive_camera)
+        recv_camera_thread = threading.Thread(target=self.receive_camera_main)
         recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_camera_thread.start()
 
@@ -193,7 +195,7 @@ class ConferenceClient:
 
         while True:
             if self.frame is not None:
-                # print("[Info]: Frame received...")
+                print("[Info]: Frame received...")
                 cv2.imshow('camera', self.frame)
                 self.frame = None
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -222,9 +224,9 @@ class ConferenceClient:
         recv_text_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_text_thread.start()
 
-        # recv_camera_thread = threading.Thread(target=self.receive_camera)
-        # recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        # recv_camera_thread.start()
+        recv_camera_thread = threading.Thread(target=self.receive_camera)
+        recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        recv_camera_thread.start()
 
     def send_texts(self):
         print("run send text")
@@ -238,10 +240,16 @@ class ConferenceClient:
             if self.text:
                 print("[Info]: Updating text...")
                 print(f"[Info]: Sending: {self.text}")
+
+                message = b''
+                user_bytes = self.user_name.encode('utf-8')
+                text_bytes = self.text.encode('utf-8')
+                message += user_bytes + b'?' * (8 - len(user_bytes)) + text_bytes
+
                 target_address = self.server_addr[0]  # 目标服务器的 IP 地址
                 port = self.ports.get('text')  # 获取对应的端口
                 #established_text.send(self.text.encode('utf-8'))
-                socket_text.sendto(self.text.encode('utf-8'), (target_address, port))
+                socket_text.sendto(message, (target_address, port))
                 self.text = None
 
     def send_audio(self):
@@ -272,7 +280,7 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: Error in send_audio: {e}")
 
-    def send_camera(self):
+    def send_camera_(self):
         camera_socket = self.sockets['camera']
         target_address = self.server_addr[0]  # 目标服务器的 IP 地址
         port = self.ports.get('camera')  # 获取对应的端口
@@ -289,12 +297,12 @@ class ConferenceClient:
                 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
                 img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                 data_encode = np.array(img_encode)
-                data = data_encode.tobytes()
-                camera_socket.sendto(data, (target_address, port))
+                image_data = data_encode.tobytes()
+                camera_socket.sendto(image_data, (target_address, port))
         else:
             self.cap.release()
 
-    def send_camera_(self):
+    def send_camera(self):
         camera_socket = self.sockets['camera']
         target_address = self.server_addr[0]  # 目标服务器的 IP 地址
         port = self.ports.get('camera')  # 获取对应的端口
@@ -312,65 +320,50 @@ class ConferenceClient:
                         # # 将 numpy 数组转换为 PIL.Image
                         # pil_image = Image.fromarray(rgb_frame)
                         # # 使用 BytesIO 将 PIL.Image 转换为字节流
-                        img_encode = cv2.imencode('.jpg', frame)[1]
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
+                        img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
-                        pil_image = Image.open(io.BytesIO(image_data))
+                        # pil_image = Image.open(io.BytesIO(image_data))
 
                         message = b''
-                        # pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                        # byte_io = BytesIO()
-                        # pil_image.save(byte_io, format='JPEG', quality=50)  # 或者 'PNG'，根据需要选择格式
-                        # image_bytes = byte_io.getvalue()  # 获取字节流
-                        # head_bytes = "head".encode('utf-8')  # len(head_byte) = 4
                         user_bytes = self.user_name.encode('utf-8')
-                        # image_length_bytes = struct.pack('!I', len(image_bytes))
-
-                        # message += head_bytes
-                        # message += user_bytes + b'\0' * (16 - len(user_bytes))  # 前16个字节
-                        message += user_bytes + image_data
-
-                        # image = decompress_image(image_bytes)
-                        self.camera_queues[self.user_name].put_nowait(pil_image)
-
-                        # print(len(self.camera_queues))
-                        # print(self.camera_queues.items())
-                        # print(self.camera_queues[self.user_name].qsize())
+                        message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
 
                         camera_socket.sendto(message, (target_address, port))
 
-                        screen_image = None
-                        camera_images = None
-                        for user_id, queue in self.camera_queues.items():
-                            if not queue.empty():
-                                if user_id == self.user_name:
-                                    print("[Info]: Updating camera image")
-                                    screen_image = queue.get()
-                                else:
-                                    if camera_images is None:
-                                        camera_images = []
-                                    if queue is not None:
-                                        image = queue.get()  # 异步获取图像字节流
-                                        self.camera_last[user_id] = image
-                                    else:
-                                        image = self.camera_last[user_id]
-                                        # width, height = image.size
-                                        # image = Image.fromarray(np.zeros((height, width, 3), dtype=np.uint8))
-                                    # pil_image = decompress_image(image_bytes)  # 解压字节流为 PIL.Image send_camera已经decompress
-                                    camera_images.append(image)  # 将 PIL.Image 添加到 camera_images 列表
+                        # screen_image = None
+                        # camera_images = None
+                        # for user_id, queue in self.camera_queues.items():
+                        #     if not queue.empty():
+                        #         if user_id == self.user_name:
+                        #             screen_image = queue.get()
+                        #         else:
+                        #             if camera_images is None:
+                        #                 camera_images = []
+                        #             if queue is not None:
+                        #                 image = queue.get()  # 异步获取图像字节流
+                        #                 self.camera_last[user_id] = image
+                        #             else:
+                        #                 image = self.camera_last[user_id]
+                        #             camera_images.append(image)  # 将 PIL.Image 添加到 camera_images 列表
+                        #
+                        # screen = overlay_camera_images(screen_image, camera_images)
+                        # if isinstance(screen, Image.Image):
+                        #     screen_image_np = np.array(screen)
+                        #     frame = cv2.cvtColor(screen_image_np, cv2.COLOR_RGB2BGR)
+                        #     self.frame = frame
+                        # screen = self.camera_queues[self.user_name].get_nowait()
+                        # screen_image_np = np.array(screen)  # 转换为 numpy.ndarray
+                        # frame = cv2.cvtColor(screen_image_np, cv2.COLOR_RGB2BGR)
 
-                        # print(type(screen_image))
-                        # print(type(camera_images))
-                        screen = overlay_camera_images(screen_image, camera_images)
-                        # print(type(screen))
-
-                        if isinstance(screen, Image.Image):  # 确保 screen 是 PIL.Image 类型
-                            # print("[Info]: Updating camera image")
-                            screen_image_np = np.array(screen)  # 转换为 numpy.ndarray
-                            frame = cv2.cvtColor(screen_image_np, cv2.COLOR_RGB2BGR)
-                            self.frame = frame
-                        else:
-                            print("[Error]: overlay_camera_images did not return a PIL.Image object.")
+                        # if isinstance(screen, Image.Image):  # 确保 screen 是 PIL.Image 类型
+                        #     # print("[Info]: Updating camera image")
+                        #     screen_image_np = np.array(screen)  # 转换为 numpy.ndarray
+                        #     frame = cv2.cvtColor(screen_image_np, cv2.COLOR_RGB2BGR)
+                        #     self.frame = frame
+                        # else:
+                        #     print("[Error]: overlay_camera_images did not return a PIL.Image object.")
                 except ConnectionAbortedError as e:
                     print(f"[Error]: Connection aborted: {e}")
         else:
@@ -385,8 +378,21 @@ class ConferenceClient:
         while self.on_meeting:
             recv_data, addr = socket_text.recvfrom(1024)
             if recv_data:
-                recv_data = recv_data.decode('utf-8')
-                print("receive message:", recv_data)
+                user_name = recv_data[:8]  # 前8个字符
+                user_name = user_name.rstrip(b'?')
+                # user_name = user_name.strip('\0')  # 解码并去掉填充的 '\0'
+                user_name = user_name.decode('utf-8')
+                recv_text = recv_data[8:]
+                recv_text = recv_text.decode('utf-8')
+                print(recv_text)
+                # 主动给前端发送信息，使用 emit 来发送自定义事件
+                # api.send_text({"message": recv_text})
+                api.recv_text(user_name, recv_text)
+                # socketio.emit('message', {
+                #     "user": user_name,
+                #     "message": recv_text
+                # })
+                print("receive message:", recv_text)
 
     def receive_audio(self):
         try:
@@ -408,15 +414,73 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: An error occurred in receive_audio: {e}")
 
-    def receive_camera(self):
+    def start_camera_thread(self, user):
+        """为每个新用户启动一个线程"""
+        if user not in self.camera_threads:
+            # 为新用户启动线程
+            recv_camera_thread = threading.Thread(target=self.receive_camera, args=(user,))
+            recv_camera_thread.daemon = True  # 设置为守护线程
+            recv_camera_thread.start()
+
+            # 将新线程存储在字典中，方便管理
+            self.camera_threads[user] = recv_camera_thread
+            print(f"为用户 {user} 启动了一个线程")
+
+    def receive_camera_main(self):
         try:
             socket_audio = self.sockets['camera']
             print("Run into camera")
             while self.on_meeting:
+                # print("waiting address")
                 recv_data, addr = socket_audio.recvfrom(400000)
-                nparr = np.frombuffer(recv_data, np.uint8)
-                img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                self.frame = img_decode
+
+                user_name = recv_data[:8]  # 前8个字符
+                user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
+                if user not in self.camera_queues:
+                    self.camera_last[user] = None
+                    self.start_camera_thread(user)
+
+                if user == self.user_name:
+                    camera_data = recv_data[8:]  # 后面的数据
+
+                    nparr = np.frombuffer(camera_data, np.uint8)
+                    camera_data_bytes = nparr.tobytes()
+                    self.camera_last[self.user_name] = camera_data_bytes
+                    # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
+                    #
+                    # # 7. 将 PIL.Image 转换为 JPEG 格式并保存到字节流
+                    # byte_io = io.BytesIO()  # 创建一个字节流对象
+                    # pil_image.save(byte_io, format='JPEG')  # 保存为 JPEG 格式
+
+                    # self.frame = img_decode
+        except Exception as e:
+            print(f"[Error]: An error occurred in receive_audio: {e}")
+
+    def receive_camera(self, default_user):
+        try:
+            socket_audio = self.sockets['camera']
+            print("Run into camera")
+            while self.on_meeting:
+                # print("waiting address")
+                recv_data, addr = socket_audio.recvfrom(400000)
+
+                user_name = recv_data[:8]  # 前8个字符
+                user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
+                if user == default_user:
+                    camera_data = recv_data[8:]  # 后面的数据
+                    nparr = np.frombuffer(camera_data, np.uint8)
+                    camera_data_bytes = nparr.tobytes()
+                    self.camera_last[default_user] = camera_data_bytes
+                    # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
+                    #
+                    # # 7. 将 PIL.Image 转换为 JPEG 格式并保存到字节流
+                    # byte_io = io.BytesIO()  # 创建一个字节流对象
+                    # pil_image.save(byte_io, format='JPEG')  # 保存为 JPEG 格式
+                    #
+                    # self.camera_queues[default_user].put(pil_image)
+                # self.frame = img_decode
         except Exception as e:
             print(f"[Error]: An error occurred in receive_audio: {e}")
 
@@ -427,27 +491,6 @@ class ConferenceClient:
         # while self.on_meeting:
         if not camera_socket:
             print("[info]: camera 初始化失败")
-        # recv_data = None
-        # recv_data = await loop.sock_recv(established_camera, 1024)
-        head_bytes = b""
-        while len(head_bytes) < 4:
-            byte, addr = camera_socket.recvfrom(1)
-            if len(head_bytes) == 0 and byte == b"h":
-                head_bytes += byte
-            else:
-                head_bytes = b""
-            if len(head_bytes) == 1 and byte == b"e":
-                head_bytes += byte
-            else:
-                head_bytes = b""
-            if len(head_bytes) == 2 and byte == b"a":
-                head_bytes += byte
-            else:
-                head_bytes = b""
-            if len(head_bytes) == 3 and byte == b"d":
-                head_bytes += byte
-            else:
-                head_bytes = b""
 
         user_bytes, addr = camera_socket.recvfrom(16)
         user = user_bytes.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'

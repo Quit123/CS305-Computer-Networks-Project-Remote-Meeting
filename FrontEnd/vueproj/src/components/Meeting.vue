@@ -96,6 +96,7 @@ export default {
         }
       });
       this.socket.on('message', (msg) => {
+        console.log("Received message", msg);
         this.messages.push(msg);
       });
     },

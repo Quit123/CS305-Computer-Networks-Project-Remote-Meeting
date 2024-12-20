@@ -5,6 +5,7 @@ import util
 import queue
 from log_register_func import *
 from flask_cors import CORS
+from flask_socketio import emit
 
 app = Flask(__name__)
 # app.config['SECRET_KEY'] = 'secret!'
@@ -23,6 +24,7 @@ join_info = {
     "con_id": None,
     "click": False
 }
+
 
 # 具体功能之后完善
 
@@ -140,7 +142,6 @@ def update_camera_status():
 def send_text(msg):
     # 自己发送的信息要传用户名
     # server发送的信息需要特殊标识一下
-
     # print(str(msg))
     client_instance = app.config.get('CLIENT_INSTANCE')
     json_message = {
@@ -152,11 +153,16 @@ def send_text(msg):
     client_instance.text = msg['message']
     print("client_instance.text:", client_instance.text)
 
+def recv_text(user, text):
+    socketio.emit('message', {
+        "user": user,
+        "message": text
+    })
 
-@socketio.on('me')
-def rev_text(msg):
-    send(msg, broadcast=True)
-    return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
+# @socketio.on('me')
+# def rev_text(msg):
+#     send(msg, broadcast=True)
+#     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
 
 @app.route('/api/box-size', methods=['POST'])
 def update_screen_size():
