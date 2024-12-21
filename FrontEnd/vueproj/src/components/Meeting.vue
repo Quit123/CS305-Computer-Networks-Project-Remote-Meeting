@@ -5,10 +5,9 @@
     </a-layout-header>
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
-        <div class="video-grid">
-          <div v-for="(video, index) in videos" :key="index" class="video-container">
-            <video :ref="'video_' + video.user_id" autoplay></video>
-          </div>
+        <!-- 只有一个视频容器 -->
+        <div class="video-container">
+          <video ref="video" autoplay></video>
         </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
@@ -21,7 +20,7 @@
       <a-layout-sider class="chat-section" :width="250">
         <div class="chat-messages">
           <div v-for="(message, index) in messages" :key="index" class="chat-message">
-            <strong>{{ message.user }}:</strong> {{ message.text }}
+            <strong>{{ message.user }}:</strong> {{ message.message }}
           </div>
         </div>
         <div class="chat-input">
@@ -33,8 +32,9 @@
   </a-layout>
 </template>
 
+
 <script>
-import {Button, Input, Layout, Switch} from 'ant-design-vue';
+import { Button, Input, Layout, Switch } from 'ant-design-vue';
 import io from 'socket.io-client';
 import axios from "axios";
 
@@ -56,13 +56,12 @@ export default {
       cameraOn: true,
       microphoneOn: false,
       socket: null,
-      videos: [],
     };
   },
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { user: 'You', text: this.newMessage });
+        this.socket.emit('message', { user: 'You', message: this.newMessage });
         this.newMessage = '';
       }
     },
@@ -91,16 +90,46 @@ export default {
       this.socket = io('http://127.0.0.1:5000');
       this.socket.on('connect', () => {
         console.log('WebSocket connected');
-        this.socket.emit('video_stream', {user_id: 'your_user_id'});
+        this.socket.emit('video_stream', { user_id: 'your_user_id' });
       });
+      // this.socket.on('video_frame', (data) => {
+      //   const videoElement = this.$refs.video;
+      //   console.log('Received video frame:', data);  // 调试信息
+      //   if (videoElement) {
+      //     // 将接收到的视频帧数据转换为 Blob，并显示在视频元素上
+      //     const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
+      //     videoElement.src = URL.createObjectURL(videoBlob);
+      //
+      //     // 确保每次加载完成后释放 URL 对象，避免内存泄漏
+      //     videoElement.onload = () => {
+      //       console.log('Video loaded successfully');
+      //       URL.revokeObjectURL(videoElement.src);
+      //     };
+      //   }
+      // });
       this.socket.on('video_frame', (data) => {
-        const videoElement = this.$refs['video_' + data.user_id];
-        if (videoElement) {
-          const videoBlob = new Blob([data.frame], { type: 'video/mp4' });
-          videoElement.src = URL.createObjectURL(videoBlob);
-        } else {
-          this.videos.push({user_id: data.user_id});
+        console.log('Received video frame:', data.frame);
+
+        // 找到对应的视频容器
+        let videoElement = document.querySelector('video');
+
+        // 如果视频容器不存在，创建一个
+        if (!videoElement) {
+          videoElement = document.createElement('video');
+          videoElement.autoplay = true;  // 设置自动播放
+          document.body.appendChild(videoElement);  // 将其添加到页面
         }
+
+        // 使用 Blob 将图像数据转换为视频源
+        const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
+
+        // 将图像数据作为 URL 设置为 video 元素的源
+        videoElement.src = URL.createObjectURL(videoBlob);
+
+        // 清除 URL 对象（可以在图片加载后触发）
+        videoElement.onload = () => {
+          URL.revokeObjectURL(videoElement.src);
+        };
       });
       this.socket.on('message', (msg) => {
         this.messages.push(msg);

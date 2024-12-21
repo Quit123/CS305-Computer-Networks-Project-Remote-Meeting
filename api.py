@@ -73,10 +73,33 @@ def Create():
     """Handle POST request for user login"""
     # global create
     # create = True
+    client_instance.conference_type = 1
     data = request.json
     title = data.get('title')
     title = title + " " + client_instance.user_name
-    ans, con_id = client_instance.create_conference(title)
+    ans, con_id = client_instance.create_conference(title, client_instance.conference_type)
+    error = 0
+    if "Error" in ans:
+        error = 1
+    print("pass")
+    if error == 0:
+        print(jsonify({'status': 'success', 'message': con_id}))
+        return jsonify({'status': 'success', 'message': con_id})
+    else:
+        return jsonify({'status': 'fail', 'message': ans})
+
+# add new
+@app.route('/api/create_P2P', methods=['POST'])
+def Create_P2P():
+    print("click Create")
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """Handle POST request for user login"""
+    client_instance.conference_type = 2
+    client_instance.p2p_initiator = True
+    data = request.json
+    title = data.get('title')
+    title = title + " " + client_instance.user_name
+    ans, con_id = client_instance.create_conference(title, client_instance.conference_type)
     error = 0
     if "Error" in ans:
         error = 1
@@ -88,16 +111,34 @@ def Create():
         return jsonify({'status': 'fail', 'message': ans})
 
 
+# add new
+@app.route('/api/check_list', methods=['POST'])
+def Check_list():
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """Handle POST request for user login"""
+    request_data = f"[COMMAND]: CHECK"
+    response = client_instance.send_request(request_data)
+    # user_name id user_name id
+    if "Error" in response:
+        return jsonify({'status': 'fail', 'message': response})
+    else:
+        print(jsonify({'status': 'success', 'message': response}))
+        return jsonify({'status': 'success', 'message': response})
+
+
 @app.route('/api/join', methods=['POST'])
 def Join():
-    print("click Join")
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     con_in = request.json
-    con_id = con_in['con_id']
-    print(con_id)
+    con_id = con_in.get('con_id')
+    print("join conference:", con_id)
     con_id = con_id + " " + client_instance.user_name
-    client_instance.join_conference(con_id)
+    result = client_instance.join_conference(con_id, client_instance.conference_type)
+    if 'Success' in result:
+        return jsonify({'status': 'success', 'message': result})
+    else:
+        return jsonify({'status': 'fail', 'message': result})
 
 
 @app.route('/api/quit', methods=['POST'])
@@ -153,11 +194,21 @@ def send_text(msg):
     client_instance.text = msg['message']
     print("client_instance.text:", client_instance.text)
 
-def recv_text(user, text):
+
+# add new
+def recv_text(time, user, text):
     socketio.emit('message', {
+        "time": time,
         "user": user,
         "message": text
     })
+
+
+def join_status(status):
+    socketio.emit('status', {
+        "status": status
+    })
+
 
 def recv_camera(user, frame):
     socketio.emit('video_frame', {
