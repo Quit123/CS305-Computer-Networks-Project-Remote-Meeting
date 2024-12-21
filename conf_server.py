@@ -281,7 +281,7 @@ class MainServer:
                 client_address = writer.get_extra_info('peername')
                 writer.write(f'SUCCESS join confernece {title} {ip}'.encode())
                 if ip != client_address[0]:
-                    owner.write(f'SUCCESS {title} {client_address[0]}'.encode())
+                    owner.write(f'SUCCESS {conference_id} {client_address[0]}'.encode())
                 self.clients_info[(writer, reader)] = conference_id
                 await writer.drain()
         else:
