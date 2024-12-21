@@ -74,6 +74,7 @@ def Create():
     # global create
     # create = True
     client_instance.conference_type = 1
+    client_instance.multi_initiator = True
     data = request.json
     title = data.get('title')
     title = title + " " + client_instance.user_name

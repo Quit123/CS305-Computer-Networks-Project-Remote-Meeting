@@ -6,9 +6,7 @@
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
         <!-- 只有一个视频容器 -->
-        <div class="video-container">
-          <video ref="video" autoplay></video>
-        </div>
+          <img ref="video" ></img>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
                     @change="toggleCamera"/>
@@ -54,7 +52,7 @@ export default {
       messages: [],
       newMessage: '',
       cameraOn: true,
-      microphoneOn: false,
+      microphoneOn: true,
       socket: null,
     };
   },

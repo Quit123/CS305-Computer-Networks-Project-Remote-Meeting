@@ -25,7 +25,7 @@ class ConferenceClient:
         #self.support_data_types = ['screen', 'camera', 'audio', 'text']  # for some types of data
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
-        self.acting_data_types['audio'] = False
+        self.acting_data_types['audio'] = True
         self.acting_data_types['camera'] = True
         self.ports = {'audio': 0, 'screen': 0, 'camera': 0, 'text': 0}
         # 用来存不同类型的socket
@@ -41,6 +41,7 @@ class ConferenceClient:
         self.cap = None
         self.conference_type = 1
         self.p2p_initiator = False
+        self.multi_initiator = False
         self.create_status = 0
 
     def check_status(self):
@@ -109,6 +110,12 @@ class ConferenceClient:
         """
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
+
+        if not self.multi_initiator and not self.p2p_initiator:
+            check_join_thread = threading.Thread(target=self.check_status)
+            check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+            check_join_thread.start()
+
         # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
         response = self.send_request(request_data)
@@ -121,9 +128,8 @@ class ConferenceClient:
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
-            print(f"[Success]: Joined conference {self.conference_id}")
             self.create_status = 1
-            print(f"share cut down or quit meeting: {self.on_meeting}")
+            print(f"[Success]: Joined conference {self.conference_id}")
             return f"[Success]: Joined conference {self.conference_id}"
         else:
             print(f"[Error]: Failed to join conference: {response}")
@@ -141,8 +147,6 @@ class ConferenceClient:
         response = self.send_request(request_data)
         if "SUCCESS" in response:
             self.close_conference()
-            self.on_meeting = False
-            self.conference_id = None
             print("[Success]: Successfully quit the conference.")
         else:
             print(f"[Error]: Failed to quit conference: {response}")
@@ -179,6 +183,8 @@ class ConferenceClient:
         print("[Info]: Closing conference...")
         self.on_meeting = False
         self.conference_id = None
+        self.p2p_initiator = False
+        self.multi_initiator = False
         # Close all active connections
 
     def send_request(self, request_data):
