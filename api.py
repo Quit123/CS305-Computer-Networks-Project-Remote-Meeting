@@ -159,6 +159,12 @@ def recv_text(user, text):
         "message": text
     })
 
+def recv_camera(user, frame):
+    socketio.emit('video_frame', {
+        "user_id": user,
+        "frame": frame
+    })
+
 # @socketio.on('me')
 # def rev_text(msg):
 #     send(msg, broadcast=True)

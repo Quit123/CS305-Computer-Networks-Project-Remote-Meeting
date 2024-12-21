@@ -427,6 +427,7 @@ class ConferenceClient:
             print(f"为用户 {user} 启动了一个线程")
 
     def receive_camera_main(self):
+        global frame_bytes
         try:
             socket_audio = self.sockets['camera']
             print("Run into camera")
@@ -442,10 +443,19 @@ class ConferenceClient:
 
                 if user == self.user_name:
                     camera_data = recv_data[8:]  # 后面的数据
+                    print(type(camera_data))
 
-                    nparr = np.frombuffer(camera_data, np.uint8)
-                    camera_data_bytes = nparr.tobytes()
-                    self.camera_last[self.user_name] = camera_data_bytes
+                    nparr = np.frombuffer(camera_data, dtype=np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    ret, jpeg = cv2.imencode('.jpg', frame)
+                    if ret:
+                        frame_bytes = jpeg.tobytes()
+                    # camera_data_base64 = base64.b64encode(nparr.tobytes()).decode('utf-8')
+                    # camera_data_bytes = nparr.tobytes()
+                    # camera_data_bytes = nparr.tobytes()
+                    # print(type(camera_data_bytes))
+                    # self.camera_last[self.user_name] = camera_data_bytes
+                    api.recv_camera(self.user_name, frame_bytes)
                     # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
                     #
@@ -455,7 +465,7 @@ class ConferenceClient:
 
                     # self.frame = img_decode
         except Exception as e:
-            print(f"[Error]: An error occurred in receive_audio: {e}")
+            print(f"[Error]: An error occurred in receive_camera: {e}")
 
     def receive_camera(self, default_user):
         try:
@@ -472,6 +482,7 @@ class ConferenceClient:
                     nparr = np.frombuffer(camera_data, np.uint8)
                     camera_data_bytes = nparr.tobytes()
                     self.camera_last[default_user] = camera_data_bytes
+                    api.recv_camera(default_user, camera_data_bytes)
                     # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
                     #
@@ -482,7 +493,7 @@ class ConferenceClient:
                     # self.camera_queues[default_user].put(pil_image)
                 # self.frame = img_decode
         except Exception as e:
-            print(f"[Error]: An error occurred in receive_audio: {e}")
+            print(f"[Error]: An error occurred in receive_camera: {e}")
 
     def receive_camera_(self, decompress=None):
         print("[Info]: Starting camera playback monitoring...")

@@ -5,8 +5,10 @@
     </a-layout-header>
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
-        <div class="video-container">
-          <video ref="video" autoplay></video>
+        <div class="video-grid">
+          <div v-for="(video, index) in videos" :key="index" class="video-container">
+            <video :ref="'video_' + video.user_id" autoplay></video>
+          </div>
         </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
@@ -19,7 +21,7 @@
       <a-layout-sider class="chat-section" :width="250">
         <div class="chat-messages">
           <div v-for="(message, index) in messages" :key="index" class="chat-message">
-            <strong>{{ message.user }}:</strong> {{ message.message }}
+            <strong>{{ message.user }}:</strong> {{ message.text }}
           </div>
         </div>
         <div class="chat-input">
@@ -32,7 +34,7 @@
 </template>
 
 <script>
-import { Layout, Button, Input, Switch } from 'ant-design-vue';
+import {Button, Input, Layout, Switch} from 'ant-design-vue';
 import io from 'socket.io-client';
 import axios from "axios";
 
@@ -54,20 +56,21 @@ export default {
       cameraOn: true,
       microphoneOn: false,
       socket: null,
+      videos: [],
     };
   },
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { user: 'You', message: this.newMessage });
+        this.socket.emit('message', { user: 'You', text: this.newMessage });
         this.newMessage = '';
       }
     },
     toggleCamera() {
-      axios.post('http://127.0.0.1:5000/api/update-audio-status');
+      axios.post('http://127.0.0.1:5000/api/update-camera-status');
     },
     toggleMicrophone() {
-      axios.post('http://127.0.0.1:5000/api/update-camera-status');
+      axios.post('http://127.0.0.1:5000/api/update-audio-status');
     },
     async exitMeeting() {
       try {
@@ -88,15 +91,18 @@ export default {
       this.socket = io('http://127.0.0.1:5000');
       this.socket.on('connect', () => {
         console.log('WebSocket connected');
+        this.socket.emit('video_stream', {user_id: 'your_user_id'});
       });
       this.socket.on('video_frame', (data) => {
-        const videoElement = this.$refs.video;
+        const videoElement = this.$refs['video_' + data.user_id];
         if (videoElement) {
-          videoElement.src = URL.createObjectURL(new Blob([data.frame], { type: 'image/jpeg' }));
+          const videoBlob = new Blob([data.frame], { type: 'video/mp4' });
+          videoElement.src = URL.createObjectURL(videoBlob);
+        } else {
+          this.videos.push({user_id: data.user_id});
         }
       });
       this.socket.on('message', (msg) => {
-        console.log("Received message", msg);
         this.messages.push(msg);
       });
     },
@@ -111,6 +117,7 @@ export default {
   },
 };
 </script>
+
 
 <style scoped>
 .meeting-container {
