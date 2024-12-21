@@ -6,7 +6,8 @@ from config import *
 from log_register_func import *
 import api
 import threading
-import io
+import time
+import datetime
 
 established_client = None
 
@@ -38,31 +39,60 @@ class ConferenceClient:
         self.established_client = None
         self.frame = None
         self.cap = None
+        self.conference_type = 1
+        self.p2p_initiator = False
+        self.create_status = 0
 
-    def set_ports(self, response):
-        port_num = int(response.split()[-1])
-        self.ports['audio'] = port_num
-        self.ports['screen'] = port_num + 1
-        self.ports['camera'] = port_num + 2
-        print("camera port:", self.ports['camera'])
-        self.ports['text'] = port_num + 3
+    def check_status(self):
+        while self.create_status == 0:
+            time.sleep(0.1)
+            print("checking")
+        if self.create_status == 1:
+            self.keep_share()
+        else:
+            print("join conference failed")
 
-    def create_conference(self, title_name):
+    def set_ports(self, response, type):
+        if type == 1:
+            port_num = int(response.split()[-1])
+            self.ports['audio'] = port_num
+            self.ports['screen'] = port_num + 1
+            self.ports['camera'] = port_num + 2
+            print("camera port:", self.ports['camera'])
+            self.ports['text'] = port_num + 3
+        else:
+            self.ports['audio'] = 8001
+            self.ports['screen'] = 8002
+            self.ports['camera'] = 8003
+            self.ports['text'] = 8004
+
+    def create_conference(self, title_name, type):
         """
         create a conference: send create-conference request to server and obtain necessary data to
         receive conference id.
         """
         print("[Info]: Creating a new conference...")
-        request_data = f"[COMMAND]: Create Conference {title_name}"
+        request_data = None
+        if type == 1:
+            request_data = f"[COMMAND]: Create Conference {title_name}"
+        else:
+            request_data = f"[COMMAND]: Create P2P Conference {title_name}"
         # 这里用来讲建立交流链接，text，和命令交流
-        print("test1")
+        print(request_data)
         response = self.send_request(request_data)
-        print("test2")
-        print("response:", response)
+        print("recv create response:", response)
         if "SUCCESS" in response:
+
+            check_join_thread = threading.Thread(target=self.check_status)
+            check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+            check_join_thread.start()
+
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
-            self.set_ports(response)
+            self.set_ports(response, type)
+            if type == 2:
+                ip_address = response.split()[-1]
+                self.server_addr = (ip_address, self.server_addr[1])
             self.on_meeting = True
             # await self.start_conference()
             print(f"[Success]: Conference created with ID {self.conference_id}")
@@ -73,7 +103,7 @@ class ConferenceClient:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
 
-    def join_conference(self, conference_id):
+    def join_conference(self, conference_id, type):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
@@ -84,14 +114,17 @@ class ConferenceClient:
         response = self.send_request(request_data)
         if "SUCCESS" in response:
             if self.ports['audio'] == 0:
-                self.set_ports(response)
+                self.set_ports(response, type)
+            if type == 2 and not self.p2p_initiator:
+                ip_address = response.split()[-1]
+                self.server_addr = (ip_address, self.server_addr[1])
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
             print(f"[Success]: Joined conference {self.conference_id}")
-            self.keep_share()
+            self.create_status = 1
             print(f"share cut down or quit meeting: {self.on_meeting}")
-            # return f"[Success]: CJoined conference {self.conference_id}"
+            return f"[Success]: Joined conference {self.conference_id}"
         else:
             print(f"[Error]: Failed to join conference: {response}")
             return f"[Error]: Failed to join conference: {response}"
@@ -155,7 +188,6 @@ class ConferenceClient:
         try:
             self.established_client.send(request_data.encode())
             response = server_response(self.established_client, None).decode("utf-8")
-            print("test1")
             return response
         except Exception as e:
             print(f"[Error]: Failed to send request: {e}")
@@ -193,13 +225,13 @@ class ConferenceClient:
         # self.recv_info()
         # print("pass2")
 
-        while True:
-            if self.frame is not None:
-                print("[Info]: Frame received...")
-                cv2.imshow('camera', self.frame)
-                self.frame = None
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+        # while True:
+        #     if self.frame is not None:
+        #         print("[Info]: Frame received...")
+        #         cv2.imshow('camera', self.frame)
+        #         self.frame = None
+        #         if cv2.waitKey(1) & 0xFF == ord('q'):
+        #             break
 
     def send_info(self):
         """Capture, compress, and send camera image to the server."""
@@ -242,9 +274,11 @@ class ConferenceClient:
                 print(f"[Info]: Sending: {self.text}")
 
                 message = b''
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp_bytes = current_time.encode('utf-8')
                 user_bytes = self.user_name.encode('utf-8')
                 text_bytes = self.text.encode('utf-8')
-                message += user_bytes + b'?' * (8 - len(user_bytes)) + text_bytes
+                message += timestamp_bytes + user_bytes + b'?' * (8 - len(user_bytes)) + text_bytes
 
                 target_address = self.server_addr[0]  # 目标服务器的 IP 地址
                 port = self.ports.get('text')  # 获取对应的端口
@@ -378,16 +412,18 @@ class ConferenceClient:
         while self.on_meeting:
             recv_data, addr = socket_text.recvfrom(1024)
             if recv_data:
-                user_name = recv_data[:8]  # 前8个字符
+                time = recv_data[:19]
+                time = time.decode('utf-8')
+                user_name = recv_data[19:27]  # 前8个字符
                 user_name = user_name.rstrip(b'?')
                 # user_name = user_name.strip('\0')  # 解码并去掉填充的 '\0'
                 user_name = user_name.decode('utf-8')
-                recv_text = recv_data[8:]
+                recv_text = recv_data[27:]
                 recv_text = recv_text.decode('utf-8')
                 print(recv_text)
                 # 主动给前端发送信息，使用 emit 来发送自定义事件
                 # api.send_text({"message": recv_text})
-                api.recv_text(user_name, recv_text)
+                api.recv_text(time, user_name, recv_text)
                 # socketio.emit('message', {
                 #     "user": user_name,
                 #     "message": recv_text
@@ -427,13 +463,12 @@ class ConferenceClient:
             print(f"为用户 {user} 启动了一个线程")
 
     def receive_camera_main(self):
-        global frame_bytes
         try:
-            socket_audio = self.sockets['camera']
+            socket_camera = self.sockets['camera']
             print("Run into camera")
             while self.on_meeting:
                 # print("waiting address")
-                recv_data, addr = socket_audio.recvfrom(400000)
+                recv_data, addr = socket_camera.recvfrom(400000)
 
                 user_name = recv_data[:8]  # 前8个字符
                 user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
@@ -443,19 +478,12 @@ class ConferenceClient:
 
                 if user == self.user_name:
                     camera_data = recv_data[8:]  # 后面的数据
-                    print(type(camera_data))
-
-                    nparr = np.frombuffer(camera_data, dtype=np.uint8)
-                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    ret, jpeg = cv2.imencode('.jpg', frame)
-                    if ret:
-                        frame_bytes = jpeg.tobytes()
-                    # camera_data_base64 = base64.b64encode(nparr.tobytes()).decode('utf-8')
-                    # camera_data_bytes = nparr.tobytes()
+                    # print(type(camera_data))
                     # camera_data_bytes = nparr.tobytes()
                     # print(type(camera_data_bytes))
                     # self.camera_last[self.user_name] = camera_data_bytes
-                    api.recv_camera(self.user_name, frame_bytes)
+                    print(f"Sending video frame to user {user}")
+                    api.recv_camera(self.user_name, camera_data)
                     # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
                     #
