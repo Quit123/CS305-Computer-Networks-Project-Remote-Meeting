@@ -114,13 +114,6 @@ class ConferenceServer:
         handle cancel conference request: disconnect all connections to cancel the conference
         """
         self.run = False
-        for writer in self.client_conns:
-            writer.close()
-            await writer.wait_closed()
-        for server in self.servers:
-            server.close()
-            await server.wait_closed()
-        self.client_conns.clear()
 
     async def build(self):
         await asyncio.gather(
@@ -253,7 +246,10 @@ class MainServer:
             self.manage_task[conference_id] = task
             writer.write(f'SUCCESS {conference_id} {self.ports}'.encode())
             print(self.ports)
-            self.ports = self.ports + 4
+            if self.ports == 8993:
+                self.ports=8000
+            else:
+                self.ports = self.ports + 4
             await writer.drain()
 
     async def handle_join_conference(self, reader, writer, conference_id, message):
@@ -309,13 +305,14 @@ class MainServer:
             else:
                 if (writer, reader) in self.conference_manager.values():  # 如果该用户是会议主持人
                     conference_id = self.reverse_conference_manager[(writer, reader)]  # 从反向映射表中找会议号
-                    self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
+                    await self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
                     task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
                     task.cancel()  # Cancel the task
-                    self.conference_manager.pop(conference_id)
+                    self.conference_manager.pop(conference_id)  # 删除（主持人，会议）记录
                     self.reverse_conference_manager.pop((writer, reader))
-                    for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
-                        self.clients_info.pop((w, r))
+                    keys_to_delete = [k for k, v in self.clients_info.items() if v == conference_id]
+                    for k in keys_to_delete:
+                        self.clients_info.pop(k)
                     self.conference_servers.pop(conference_id)  # 删除该会议
                     writer.write(f'SUCCESS: Cancel Conference: {conference_id}'.encode())
                     client_address = writer.get_extra_info('peername')
@@ -367,7 +364,6 @@ class MainServer:
                     f.write(f'{client_address}' + message + '\n')
                     print(f'{client_address}:{message}')
                     if message.startswith('[COMMAND]:'):
-                        print('here:' + message)
                         opera = message.split(' ')[1]
 
                         if opera.startswith('Create'):
