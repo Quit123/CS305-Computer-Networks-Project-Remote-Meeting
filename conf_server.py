@@ -13,7 +13,7 @@ class ConferenceServer:
         # async server
         self.conference_id = conference_id  # conference_id for distinguish difference conference
         self.title = title
-        self.data_serve_ports = [port, port+1, port+2, port+3]  # self.data_serve_ports=[]
+        self.data_serve_ports = [port, port + 1, port + 2, port + 3]  # self.data_serve_ports=[]
         self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
         self.user_name = []
         self.conns = []
@@ -79,7 +79,7 @@ class ConferenceServer:
                     writer.write("FAILURE wrong user".encode())
                     await writer.drain()
             elif (parts[1] == "QUIT"):
-                if (parts[-1] in self.client_conns):
+                if parts[-1] in self.client_conns:
                     self.user_name.remove(parts[-1])
                     self.last_online_users -= 1
                     self.online_users -= 1
@@ -91,8 +91,8 @@ class ConferenceServer:
             else:
                 writer.write("FAILURE invalid command".encode())
                 await writer.drain()
-        elif (parts[0].startswith('[ASK]')):
-            if (self.online_users > self.last_online_users):
+        elif parts[0].startswith('[ASK]'):
+            if self.online_users > self.last_online_users:
                 writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
                 await writer.drain()
             else:
@@ -224,6 +224,7 @@ class MainServer:
         self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
         self.manage_task = {}  # 管理每个会议协程
         self.user_conference = {}  # P2P模式下管理（主持人:会议号)
+        self.P2P_conf_name = {}  # P2P模式下管理（会议号:会议名）
         self.P2P_conference = {}  # P2P模式管理会议号和(主持人IP,writer)
         self.ports = 8001
 
@@ -238,8 +239,9 @@ class MainServer:
         print(conference_id)
         if type == 'P2P':
             client_address = writer.get_extra_info('peername')
-            self.user_conference[user_name]=conference_id
-            self.P2P_conference[conference_id] = (client_address[0],writer)
+            self.user_conference[user_name] = conference_id
+            self.P2P_conference[conference_id] = (client_address[0], writer)
+            self.P2P_conf_name[conference_id] = title
         else:
             new_conference = ConferenceServer(conference_id, title, self.ports)  # 创建新会议服务器
             client_address = writer.get_extra_info('peername')
@@ -249,8 +251,7 @@ class MainServer:
             self.reverse_conference_manager[(writer, reader)] = conference_id
             task = asyncio.create_task(new_conference.start())
             self.manage_task[conference_id] = task
-            writer.write(
-                f'SUCCESS {conference_id} {self.ports}'.encode())
+            writer.write(f'SUCCESS {conference_id} {self.ports}'.encode())
             print(self.ports)
             self.ports = self.ports + 4
             await writer.drain()
@@ -276,10 +277,11 @@ class MainServer:
                 await writer.drain()
             else:
                 ip, owner = self.P2P_conference[conference_id]
+                title = self.P2P_conf_name[conference_id]
                 client_address = writer.get_extra_info('peername')
-                writer.write(f'{ip}'.encode())
-                if ip!= client_address[0]:
-                    owner.write(f'{client_address[0]}'.encode())
+                writer.write(f'SUCCESS join confernece {title} {ip}'.encode())
+                if ip != client_address[0]:
+                    owner.write(f'SUCCESS {title} {client_address[0]}'.encode())
                 self.clients_info[(writer, reader)] = conference_id
                 await writer.drain()
         else:
@@ -294,7 +296,7 @@ class MainServer:
             cid = self.clients_info[(writer, reader)]
             if cid in self.P2P_conference:
                 client_address = writer.get_extra_info('peername')
-                if client_address[0]==self.P2P_conference[cid][0]:
+                if client_address[0] == self.P2P_conference[cid][0]:
                     self.P2P_conference.pop(cid)
                     self.user_conference.pop(client_address[0])
                     self.clients_info.pop((writer, reader))
@@ -382,11 +384,11 @@ class MainServer:
                         elif opera.startswith('QUIT'):
                             await self.handle_quit_conference(reader, writer, message)
                         elif opera.startswith('CHECKLIST'):
-                            list=""
+                            list = ""
                             for k, v in self.user_conference.items():
-                                user_name=k
-                                conference_id=v
-                                list=list+user_name+" "+conference_id+" "
+                                user_name = k
+                                conference_id = v
+                                list = list + user_name + " " + conference_id + " "
                             print(list)
                             writer.write(f'{list}'.encode())
                     else:
