@@ -28,9 +28,11 @@ class ConferenceServer:
         message = message
         parts = message.strip().split(" ")
         address = writer.get_extra_info('peername')
+        address = address[0]
         if (parts[0].startswith('[COMMAND]')):
             if (parts[1] == "JOIN"):
                 if (address not in self.conns):
+                    print(address)
                     self.conns.append(address)
                     print(f"SUCCESS join confernece {self.title}")
                     writer.write(f"SUCCESS join confernece {self.title} {self.data_serve_ports[0]}".encode())
@@ -135,10 +137,32 @@ class ConferenceServer:
             if (client_address[0] not in conns):
                 # print(client_address)
                 conns.append(client_address[0])
-            # print(data.decode())
+            print(data.decode())
+            print(conns)
             for w in conns:
                 if w != client_address[0]:
                     await loop.sock_sendto(udp_server_socket, data, (w, self.data_serve_ports[3]))
+
+    async def udp_server4(self): # screen
+        loop = asyncio.get_running_loop()
+        udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        buffer_size = 65536  # 设置为较大的值，例如 65535 字节
+        udp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)
+        server_address = (SERVER_IP, self.data_serve_ports[1])
+        udp_server_socket.bind(server_address)
+        udp_server_socket.setblocking(False)
+
+        print("UDP server4 is running...")
+        conns = self.conns
+        while self.run:
+            data, client_address = await loop.sock_recvfrom(udp_server_socket, buffer_size)
+            if (client_address[0] not in conns):
+                print(client_address)
+                conns.append(client_address[0])
+            # print(data.decode())
+            for w in conns:
+                # if w != client_address[0]:
+                await loop.sock_sendto(udp_server_socket, data, (w, self.data_serve_ports[1]))
 
     async def start(self):
         '''
@@ -196,7 +220,7 @@ class MainServer:
             new_conference.owner = writer
             self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
             self.conference_manager[conference_id] = writer  # 用writer唯一标识会议创建者（注：有时间的话去换成ip?）
-            self.reverse_conference_manager[(writer, reader)] = conference_id
+            self.reverse_conference_manager[writer] = conference_id
             task = asyncio.create_task(new_conference.start())
             self.manage_task[conference_id] = task
             writer.write(f'SUCCESS {conference_id} {self.ports}'.encode())
@@ -261,14 +285,21 @@ class MainServer:
                 cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
                 # await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
                 # 此时会议服务器已经更换主持人
+                flag = 0
                 if writer == self.conference_manager[cid]:
                     self.clients_info.pop((writer, reader))
+                    self.reverse_conference_manager.pop(writer)
                     for k, v in self.clients_info.items():
                         if v == cid:
                             self.conference_manager[cid] = k  # 改变MainServer记录的主持人
                             self.conference_servers[cid].owner = k  # 改变ConferenceServer的主持人
-                            k.write(f'You have already became the owner of conference {cid}'.encode())
+                            self.reverse_conference_manager[k]=cid
+                            k.write(f'HOST'.encode())
+                            flag=1
                             break
+                    if flag == 0:
+                        task = self.manage_task.pop(cid)  # Get the task associated with the conference
+                        task.cancel()  # Cancel the task
                     await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
                 else:
                     await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
@@ -287,13 +318,13 @@ class MainServer:
         cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
         """
         if (writer, reader) in self.conference_manager.values():  # 如果该用户是会议主持人
-            conference_id = self.reverse_conference_manager[(writer, reader)]  # 从反向映射表中找会议号
+            conference_id = self.reverse_conference_manager[writer]  # 从反向映射表中找会议号
             await self.conference_servers[conference_id].handle_client(reader, writer,
                                                                        message)  # 有的话发送给conference_server
             task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
             task.cancel()  # Cancel the task
             self.conference_manager.pop(conference_id)  # 删除（主持人，会议）记录
-            self.reverse_conference_manager.pop((writer, reader))
+            self.reverse_conference_manager.pop(writer)
             keys_to_delete = [k for k, v in self.clients_info.items() if v == conference_id]
             for k in keys_to_delete:
                 self.clients_info.pop(k)
