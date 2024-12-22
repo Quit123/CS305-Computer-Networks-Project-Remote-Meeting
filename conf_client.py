@@ -249,9 +249,9 @@ class ConferenceClient:
         send_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         send_camera_thread.start()
 
-        send_screen_thread = threading.Thread(target=self.send_screen)
-        send_screen_thread.daemon = True
-        send_screen_thread.start()
+        # send_screen_thread = threading.Thread(target=self.send_screen)
+        # send_screen_thread.daemon = True
+        # send_screen_thread.start()
 
     def recv_info(self):
         recv_audio_thread = threading.Thread(target=self.receive_audio)
@@ -266,27 +266,9 @@ class ConferenceClient:
         recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_camera_thread.start()
 
-    def send_screen(self):
-        socket_screen = self.sockets['screen']
-        target_address = self.server_addr[0]  # 目标服务器的 IP 地址
-        port = self.ports.get('screen')  # 获取对应的端口
-        print("run function of send screen")
-        while self.on_meeting:
-            if self.acting_data_types['screen']:
-                img = pyautogui.screenshot()
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
-                img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
-                img = np.array(img_encoded)
-                compressed_image_data = img.tobytes()
-                socket_screen.sendto(compressed_image_data, (target_address, port))
-
-                # img = ImageGrab.grab()
-                # # 创建一个 BytesIO 对象，用于存储图像数据
-                # with io.BytesIO() as output:
-                #     # 保存图像为 JPEG 格式，并设置质量
-                #     img.save(output, format="JPEG", quality=40)
-                #     compressed_image_data = output.getvalue()
-                #     socket_screen.sendto(compressed_image_data, (target_address, port))
+        # recv_screen_thread = threading.Thread(target=self.receive_screen)
+        # recv_screen_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        # recv_screen_thread.start()
 
     def send_texts(self):
         socket_text = self.sockets['text']
@@ -315,9 +297,12 @@ class ConferenceClient:
             self.stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
             socket_audio = self.sockets['audio']
             socket_text = self.sockets['text']
+            # socket_camera = self.sockets['camera']
+            repeat = 0
             target_address = self.server_addr[0]  # 目标服务器的 IP 地址
             port_audio = self.ports.get('audio')  # 获取对应的端口
             port_text = self.ports.get('text')  # 获取对应的端口
+            # port_camera = self.ports.get('camera')  # 获取对应的端口
             print("run function of send text")
             print("run function of send audio")
             while self.on_meeting:
@@ -344,9 +329,8 @@ class ConferenceClient:
                     self.stream = None
 
                 if self.text:
-                    print("[Info]: Updating text...")
-                    print(f"[Info]: Sending: {self.text}")
 
+                    print(f"[Info]: Sending: {self.text}")
                     message = b''
                     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     timestamp_bytes = current_time.encode('utf-8')
@@ -361,10 +345,27 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: Error in send_audio: {e}")
 
-    def send_camera(self):
-        camera_socket = self.sockets['camera']
+    def send_screen(self):
+        socket_screen = self.sockets['screen']
         target_address = self.server_addr[0]  # 目标服务器的 IP 地址
-        port = self.ports.get('camera')  # 获取对应的端口
+        port = self.ports.get('screen')  # 获取对应的端口
+        print("run function of send screen")
+        while self.on_meeting:
+            if self.acting_data_types['screen']:
+                img = pyautogui.screenshot()
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+                img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                img = np.array(img_encoded)
+                compressed_image_data = img.tobytes()
+                socket_screen.sendto(compressed_image_data, (target_address, port))
+
+    def send_camera(self):
+        target_address = self.server_addr[0]  # 目标服务器的 IP 地址
+        camera_socket = self.sockets['camera']
+        port_camera = self.ports.get('camera')  # 获取对应的端口
+        socket_screen = self.sockets['screen']
+        port_screen = self.ports.get('screen')  # 获取对应的端口
+        print("run function of send screen")
         repeat = 0
         print("run function of send camera")
         while self.on_meeting:
@@ -373,16 +374,10 @@ class ConferenceClient:
                     repeat = 0
                     self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
                     self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
-                    # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-                    # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
                     self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
                 ret, frame = self.cap.read()
                 try:
                     if ret:
-                        # frame = np.array(frame)
-                        # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
-                        # img_encoded = cv2.imencode('.jpg', frame, encode_param)[1]
-                        # image_data = img_encoded.tobytes()
                         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                         data_encode = np.array(img_encode)
@@ -391,7 +386,7 @@ class ConferenceClient:
                         message = b''
                         user_bytes = self.user_name.encode('utf-8')
                         message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
-                        camera_socket.sendto(message, (target_address, port))
+                        camera_socket.sendto(message, (target_address, port_camera))
                 except ConnectionAbortedError as e:
                     print(f"[Error]: Connection aborted: {e}")
             else:
@@ -404,11 +399,19 @@ class ConferenceClient:
                     message = b''
                     user_bytes = self.user_name.encode('utf-8')
                     message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
-                    camera_socket.sendto(message, (target_address, port))
+                    camera_socket.sendto(message, (target_address, port_camera))
                     repeat = 1
                 if self.cap is not None:
                     self.cap.release()
                     self.cap = None
+            if self.acting_data_types['screen']:
+                img = pyautogui.screenshot()
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+                img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                img = np.array(img_encoded)
+                compressed_image_data = img.tobytes()
+                socket_screen.sendto(compressed_image_data, (target_address, port_screen))
+
 
     def receive_text(self, decompress=None):
         socket_text = self.sockets['text']
@@ -502,9 +505,18 @@ class ConferenceClient:
                     # camera_data_bytes = nparr.tobytes()
                     self.camera_last[default_user] = camera_data
                     api.recv_camera(default_user, camera_data)
-
         except Exception as e:
             print(f"[Error]: An error occurred in receive_camera: {e}")
+
+    def receive_screen(self):
+        try:
+            socket_screen = self.sockets['screen']
+            print("[Info]: Starting screen playback monitoring...")
+            while self.on_meeting:
+                recv_data, addr = socket_screen.recvfrom(400000)
+                api.recv_screen(recv_data)
+        except Exception as e:
+            print(f"[Error]: An error occurred in receive_screen: {e}")
 
     def share_switch(self, data_type):
         """
