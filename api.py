@@ -44,7 +44,7 @@ def login():
     if "Login successfully" in recv:
         login_info["status"] = True
         client_instance.user_name = username
-        client_instance.camera_queues[username] = queue.Queue()
+        # client_instance.camera_queues[username] = queue.Queue()
         client_instance.camera_last[username] = None
         return jsonify({'status': 'success', 'message': 'Login successful'})
     else:
@@ -234,6 +234,12 @@ def recv_screen(screen_frame):
 
 def recv_host_info(message):
     socketio.emit('host_info', {
+        "message": message
+    })
+
+
+def recv_quit(message):
+    socketio.emit('quit_info', {
         "message": message
     })
 
