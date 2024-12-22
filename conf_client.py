@@ -453,10 +453,10 @@ class ConferenceClient:
                 user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
                 if user == default_user:
                     camera_data = recv_data[8:]  # 后面的数据
-                    nparr = np.frombuffer(camera_data, np.uint8)
-                    camera_data_bytes = nparr.tobytes()
-                    self.camera_last[default_user] = camera_data_bytes
-                    api.recv_camera(default_user, camera_data_bytes)
+                    # nparr = np.frombuffer(camera_data, np.uint8)
+                    # camera_data_bytes = nparr.tobytes()
+                    self.camera_last[default_user] = camera_data
+                    api.recv_camera(default_user, camera_data)
 
         except Exception as e:
             print(f"[Error]: An error occurred in receive_camera: {e}")
