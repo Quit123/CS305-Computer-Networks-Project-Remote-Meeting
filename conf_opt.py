@@ -38,6 +38,10 @@ def establish_connect(self):
                 # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 # sock.connect((self.server_addr[0], port))
                 # self.sockets[type] = sock
+            if type == 'screen':
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.bind(('0.0.0.0', port))
+                self.sockets[type] = sock
         print(f"[Info]: Connected to '{self.server_addr[0]}' server.")
     except Exception as e:
         print(f"[Error]: Could not connect to '{self.server_addr[0]}' server: {e}")

@@ -6,6 +6,7 @@ import queue
 from log_register_func import *
 from flask_cors import CORS
 from flask_socketio import emit
+import datetime
 
 app = Flask(__name__)
 # app.config['SECRET_KEY'] = 'secret!'
@@ -76,6 +77,7 @@ def Create():
     # create = True
     client_instance.conference_type = 1
     client_instance.multi_initiator = True
+    client_instance.host = True
     data = request.json
     title = data.get('title')
     title = title + " " + client_instance.user_name
@@ -156,14 +158,17 @@ def Quit():
 
 
 @app.route('/api/cancel', methods=['POST'])
-def Cancel():
+async def Cancel():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     # global cancel
     # cancel = True
-    client_instance.cancel_conference()
-    # if username in users and users[username] == password:
-    return jsonify({'status': 'success', 'message': 'Click cancel return'})
+    if client_instance.host:
+        await client_instance.cancel_conference()
+        # if username in users and users[username] == password:
+        return jsonify({'status': 'success', 'message': 'Click cancel return'})
+    else:
+        return jsonify({'status': 'fail', 'message': 'Click cancel return'})
 
 
 @app.route('/api/update-audio-status', methods=['POST'])
@@ -189,6 +194,7 @@ def send_text(msg):
     # print(str(msg))
     client_instance = app.config.get('CLIENT_INSTANCE')
     json_message = {
+        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "user": client_instance.user_name,
         "message": msg['message']
     }
@@ -217,6 +223,12 @@ def recv_camera(user, frame):
     socketio.emit('video_frame', {
         "user_id": user,
         "frame": frame
+    })
+
+
+def recv_host_info(message):
+    socketio.emit('host_info', {
+        "message": message
     })
 
 # @socketio.on('me')
