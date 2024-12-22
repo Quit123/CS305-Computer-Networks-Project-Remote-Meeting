@@ -7,8 +7,11 @@
       <a-layout-content class="video-section">
         <div class="video-grid">
           <div v-for="(video, index) in videos" :key="index" class="video-container">
-            <canvas :ref="'video_' + video.user_id" width="640" height="360"/>
+            <canvas :ref="'video_' + video.user_id" width="270" height="150"/>
           </div>
+        </div>
+        <div class="screen-share">
+          <canvas ref="screenCanvas" width="1080" height="720"/>
         </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
@@ -16,12 +19,13 @@
           <a-switch checked-children="Mic On" un-checked-children="Mic Off" v-model:checked="microphoneOn"
                     @change="toggleMicrophone"/>
           <a-button type="primary" class="exit-button" @click="exitMeeting">Exit Meeting</a-button>
+          <a-button type="danger" class="cancel-button" @click="cancelMeeting">Cancel Meeting</a-button>
         </div>
       </a-layout-content>
       <a-layout-sider class="chat-section" :width="250">
         <div class="chat-messages">
           <div v-for="(message, index) in messages" :key="index" class="chat-message">
-            <strong>{{ message.user }}:</strong> {{ message.message }}
+            <strong>{{ message.user }}:</strong> {{ message.message }} <span class="timestamp">{{ message.time }} </span>
           </div>
         </div>
         <div class="chat-input">
@@ -62,7 +66,7 @@ export default {
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.socket.emit('message', { user: 'You', message: this.newMessage });
+        this.socket.emit('message',{message: this.newMessage})
         this.newMessage = '';
       }
     },
@@ -87,6 +91,21 @@ export default {
         alert('退出失败，妮可不让你退出哦');
       }
     },
+    async cancelMeeting() {
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/cancel');
+        if (response.data.status === 'success') {
+          console.log('取消成功:', response.data);
+          this.$router.push('/dashboard');
+        } else {
+          console.error('取消失败:', response.data);
+          alert('取消失败，妮可不让你取消哦');
+        }
+      } catch (error) {
+        console.error('取消失败:', error);
+        alert('取消失败，妮可不让你取消哦');
+      }
+    },
     connectToSocket() {
       this.socket = io('http://127.0.0.1:5000');
       this.socket.on('connect', () => {
@@ -95,7 +114,7 @@ export default {
       });
 
       this.socket.on('video_frame', (data) => {
-        const videoElements = this.$refs['video_' + data.user_id];  // 获取 canvas 元素数组
+        const videoElements = this.$refs['video_' + data.user_id];  // 获取 video 元素
 
         if (videoElements && Array.isArray(videoElements)) {
           videoElements.forEach((videoElement) => {
@@ -141,7 +160,7 @@ export default {
 
 <style scoped>
 .meeting-container {
-  height: 60vh;
+  height: 100vh;
   display: flex;
 }
 
@@ -152,11 +171,33 @@ export default {
   padding: 10px;
 }
 
+.video-grid {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 10px;
+}
+
+.video-container {
+  width: 25%; /* 四个视频元素平分宽度 */
+  height: 2px; /* 增加高度 */
+}
+
+.screen-share {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
 .controls {
   display: flex;
   justify-content: space-around;
   padding: 10px;
   border-top: 1px solid #ccc;
+  position: fixed;
+  bottom: 0;
+  width: calc(100% - 250px); /* 减去聊天栏的宽度 */
+  background-color: white;
+  margin-right: 250px; /* 确保按钮不会被聊天栏覆盖 */
 }
 
 .chat-section {
@@ -190,6 +231,12 @@ export default {
   bottom: 10px;
 }
 
+.timestamp {
+  font-size: 0.7em; /* 调整字体大小 */
+  color: lightgray; /* 调整字体颜色 */
+  margin-left: 10px;
+}
+
 .exit-button {
   background-color: red;
   border-color: red;
@@ -201,31 +248,14 @@ export default {
   border-color: darkred;
 }
 
-.video-section {
-  display: flow-root;
-  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr)); /* 自动根据容器宽度填充视频 */
-  gap: 10px; /* 控制视频间距 */
-  justify-content: center;
-  align-items: center;
+.cancel-button {
+  background-color: red;
+  border-color: red;
+  color: white;
 }
 
-.video-container canvas {
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: 8px;
+.cancel-button:hover {
+  background-color: darkred;
+  border-color: darkred;
 }
-
-.video-container {
-  width: 100%;
-  height: 0;
-  padding-bottom: 56.25%; /* 16:9 aspect ratio */
-  position: relative;
-}
-
-.video-container canvas {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-}
-
 </style>
