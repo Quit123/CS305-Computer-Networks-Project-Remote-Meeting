@@ -205,12 +205,18 @@ class ConferenceClient:
         self.acting_data_types['screen'] = False
         self.ports = {'audio': 0, 'screen': 0, 'camera': 0, 'text': 0}
         self.sockets = {}
+
+        self.text = None
         self.camera_queues = {}
         self.camera_last = {}
         self.camera_threads = {}
+
         self.host = False
+        self.can_share_screen = True
+
         self.conference_type = 1
         self.create_status = 0
+
         if self.cap is not None:
             self.cap.close()
         if self.stream is not None:
@@ -218,19 +224,8 @@ class ConferenceClient:
         # Close all active connections
 
         # 用来存不同类型的socket
-          # 存储每个成员对应的线程
-        self.text = None
-        self.can_share_screen = True
-        self.conference_info = None  # you may need to save and update some conference_info regularly
-        self.established_client = None
-        self.frame = None
-        self.cap = None
-        self.stream = None
-        self.conference_type = 1
-        self.p2p_initiator = False
-        self.multi_initiator = False
-        self.create_status = 0
-        self.host = False
+        # 存储每个成员对应的线程
+
 
     def send_request(self, request_data):
         """
@@ -393,6 +388,7 @@ class ConferenceClient:
                 img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
                 img = np.array(img_encoded)
                 compressed_image_data = img.tobytes()
+
                 socket_screen.sendto(compressed_image_data, (target_address, port))
 
     def send_camera(self):
@@ -442,6 +438,7 @@ class ConferenceClient:
                 if self.cap is not None:
                     self.cap.release()
                     self.cap = None
+
             if self.acting_data_types['screen']:
                 img = pyautogui.screenshot()
                 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
