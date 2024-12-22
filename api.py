@@ -38,6 +38,7 @@ def login():
     password = data.get('password')
     use_input = f"login {username} {password}"
     print("client_instance:", client_instance)
+    print("use_input:", use_input)
     recv = server_message_encrypt(use_input, client_instance)
     if "Login successfully" in recv:
         login_info["status"] = True

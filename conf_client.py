@@ -26,7 +26,7 @@ class ConferenceClient:
         self.acting_data_types = {data_type: False for data_type in ['screen', 'camera', 'audio']}
         self.acting_data_types['text'] = True  # 这里使用前端控制，delete
         self.acting_data_types['audio'] = True
-        self.acting_data_types['camera'] = True
+        self.acting_data_types['camera'] = False
         self.ports = {'audio': 0, 'screen': 0, 'camera': 0, 'text': 0}
         # 用来存不同类型的socket
         self.sockets = {}
@@ -39,6 +39,7 @@ class ConferenceClient:
         self.established_client = None
         self.frame = None
         self.cap = None
+        self.stream = None
         self.conference_type = 1
         self.p2p_initiator = False
         self.multi_initiator = False
@@ -84,9 +85,9 @@ class ConferenceClient:
         print("recv create response:", response)
         if "SUCCESS" in response:
 
-            check_join_thread = threading.Thread(target=self.check_status)
-            check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-            check_join_thread.start()
+            # check_join_thread = threading.Thread(target=self.check_status)
+            # check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+            # check_join_thread.start()
 
             # 回复格式 SUCCESS 123456
             self.conference_id = response.split()[1]
@@ -111,13 +112,14 @@ class ConferenceClient:
         print(f"[Info]: Joining conference {conference_id}...")
         self.conference_id = conference_id
 
-        if not self.multi_initiator and not self.p2p_initiator:
-            check_join_thread = threading.Thread(target=self.check_status)
-            check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-            check_join_thread.start()
+        # if not self.multi_initiator and not self.p2p_initiator:
+        #     check_join_thread = threading.Thread(target=self.check_status)
+        #     check_join_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        #     check_join_thread.start()
 
         # 这里用来讲建立交流链接，text，和命令交流
         request_data = f"[COMMAND]: JOIN {conference_id}"
+        print(request_data)
         response = self.send_request(request_data)
         if "SUCCESS" in response:
             if self.ports['audio'] == 0:
@@ -128,7 +130,8 @@ class ConferenceClient:
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
-            self.create_status = 1
+            self.keep_share()
+            # self.create_status = 1
             print(f"[Success]: Joined conference {self.conference_id}")
             return f"[Success]: Joined conference {self.conference_id}"
         else:
@@ -185,6 +188,8 @@ class ConferenceClient:
         self.conference_id = None
         self.p2p_initiator = False
         self.multi_initiator = False
+        self.conference_type = 1
+        self.create_status = 0
         # Close all active connections
 
     def send_request(self, request_data):
@@ -206,11 +211,11 @@ class ConferenceClient:
         """
         print("good")
 
-        cap = cv2.VideoCapture(0)
-        self.cap = cap
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-        self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
+        # cap = cv2.VideoCapture(0)
+        # self.cap = cap
+        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+        # self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
 
         self.send_info()
 
@@ -294,29 +299,33 @@ class ConferenceClient:
 
     def send_audio(self):
         try:
-            streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+            self.stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
             socket_audio = self.sockets['audio']
             target_address = self.server_addr[0]  # 目标服务器的 IP 地址
             port = self.ports.get('audio')  # 获取对应的端口
             print("run send audio")
             while self.on_meeting:
-                # data = streamin.read(CHUNK)
-                # socket_audio.sendto(data, (target_address, port))
-                try:
-                    data = streamin.read(CHUNK)
-                    if not data:
-                        continue
+                if self.acting_data_types['audio']:
+                    if self.stream is None:
+                        self.stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
                     try:
-                        socket_audio.sendto(data, (target_address, port))
+                        data = self.stream.read(CHUNK)
+                        if not data:
+                            continue
+                        try:
+                            socket_audio.sendto(data, (target_address, port))
+                        except socket.error as e:
+                            print(f"[Error]: Socket error during audio send: {e}")
                     except socket.error as e:
                         print(f"[Error]: Socket error during audio send: {e}")
-                except socket.error as e:
-                    print(f"[Error]: Socket error during audio send: {e}")
-                    # 处理连接错误，可以重新尝试连接或退出
-                    break  # 连接中断，退出循环
-                except Exception as e:
-                    print(f"[Error]: Unexpected error during audio send: {e}")
-                    break  # 捕获其他异常，退出循环
+                        # 处理连接错误，可以重新尝试连接或退出
+                        break  # 连接中断，退出循环
+                    except Exception as e:
+                        print(f"[Error]: Unexpected error during audio send: {e}")
+                        break  # 捕获其他异常，退出循环
+                else:
+                    self.stream.close()  # 关闭流
+                    self.stream = None
         except Exception as e:
             print(f"[Error]: Error in send_audio: {e}")
 
@@ -348,10 +357,11 @@ class ConferenceClient:
         port = self.ports.get('camera')  # 获取对应的端口
         while self.on_meeting:
             if self.acting_data_types['camera']:
-                if not self.cap.isOpened():
-                    cap = cv2.VideoCapture(0)
-                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+                if self.cap is None:
+                    self.cap = cv2.VideoCapture(0)
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+                    self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
                 ret, frame = self.cap.read()
                 try:
                     if ret:
@@ -406,8 +416,9 @@ class ConferenceClient:
                         #     print("[Error]: overlay_camera_images did not return a PIL.Image object.")
                 except ConnectionAbortedError as e:
                     print(f"[Error]: Connection aborted: {e}")
-        else:
-            self.cap.release()
+            else:
+                self.cap.release()
+                self.cap = None
 
     def receive_text(self, decompress=None):
         socket_text = self.sockets['text']
@@ -488,7 +499,6 @@ class ConferenceClient:
                     # camera_data_bytes = nparr.tobytes()
                     # print(type(camera_data_bytes))
                     # self.camera_last[self.user_name] = camera_data_bytes
-                    print(f"Sending video frame to user {user}")
                     api.recv_camera(self.user_name, camera_data)
                     # img_decode = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     # pil_image = Image.fromarray(cv2.cvtColor(img_decode, cv2.COLOR_BGR2RGB))
@@ -560,12 +570,12 @@ class ConferenceClient:
         if data_type not in self.support_data_types:
             print(f"[Warn]: Data type {data_type} is not supported.")
             return
-        if data_type not in self.acting_data_types:
-            self.acting_data_types[data_type] = True
-            print(f"[Info]: Opening sharing for {data_type}...")
-        else:
+        if self.acting_data_types[data_type]:
             self.acting_data_types[data_type] = False
             print(f"[Info]: Closing sharing for {data_type}...")
+        else:
+            self.acting_data_types[data_type] = True
+            print(f"[Info]: Opening sharing for {data_type}...")
 
         # Implementation for toggling data sharing
 
