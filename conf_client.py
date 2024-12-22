@@ -111,7 +111,7 @@ class ConferenceClient:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
 
-    def join_conference(self, conference_id, type):
+    def join_conference(self, conference_id):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
@@ -128,11 +128,12 @@ class ConferenceClient:
         print(request_data)
         response = self.send_request(request_data)
         if "SUCCESS" in response:
+            if "P2P" in response:
+                self.conference_type = 2
             if self.ports['audio'] == 0:
-                self.set_ports(response, type)
-            if type == 2 and not self.p2p_initiator:
-                ip_address = response.split()[-1]
-                self.server_addr = (ip_address, self.server_addr[1])
+                self.set_ports(response, self.conference_type)
+            if self.conference_type == 2 and not self.p2p_initiator:
+                self.server_addr = (response.split()[-1], self.server_addr[1])
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
@@ -152,7 +153,10 @@ class ConferenceClient:
             print("[Warn]: Not currently in any meeting.")
             return
         print("[Info]: Quitting conference...")
-        request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
+        if self.conference_type == 1:
+            request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
+        else:
+            request_data = f"[COMMAND]: QUIT P2P ID{self.user_name} {self.conference_id}"
         response = self.send_request(request_data)
         if "SUCCESS" in response:
             self.close_conference()
@@ -165,7 +169,10 @@ class ConferenceClient:
         cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
         print("[Info]: Cancelling conference...")
-        request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
+        if self.conference_type == 1:
+            request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
+        else:
+            request_data = f"[COMMAND]: CANCEL P2P id {self.conference_id} {self.user_name}"
         response = await self.send_request(request_data)
         if response.startswith("SUCCESS"):
             self.close_conference()
@@ -192,6 +199,15 @@ class ConferenceClient:
         self.conference_id = None
         self.p2p_initiator = False
         self.multi_initiator = False
+        self.acting_data_types['text'] = True  # 这里使用前端控制，delete
+        self.acting_data_types['audio'] = True
+        self.acting_data_types['camera'] = False
+        self.acting_data_types['screen'] = False
+        self.ports = {'audio': 0, 'screen': 0, 'camera': 0, 'text': 0}
+        self.sockets = {}
+        self.camera_queues = {}
+        self.camera_last = {}
+        self.camera_threads = {}
         self.host = False
         self.conference_type = 1
         self.create_status = 0
@@ -200,6 +216,21 @@ class ConferenceClient:
         if self.stream is not None:
             self.stream.close()
         # Close all active connections
+
+        # 用来存不同类型的socket
+          # 存储每个成员对应的线程
+        self.text = None
+        self.can_share_screen = True
+        self.conference_info = None  # you may need to save and update some conference_info regularly
+        self.established_client = None
+        self.frame = None
+        self.cap = None
+        self.stream = None
+        self.conference_type = 1
+        self.p2p_initiator = False
+        self.multi_initiator = False
+        self.create_status = 0
+        self.host = False
 
     def send_request(self, request_data):
         """
@@ -382,6 +413,7 @@ class ConferenceClient:
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
+                        api.recv_camera(self.user_name, image_data)
 
                         message = b''
                         user_bytes = self.user_name.encode('utf-8')
@@ -457,15 +489,15 @@ class ConferenceClient:
 
     def start_camera_thread(self, user):
         """为每个新用户启动一个线程"""
-        if user not in self.camera_threads:
-            # 为新用户启动线程
-            recv_camera_thread = threading.Thread(target=self.receive_camera, args=(user,))
-            recv_camera_thread.daemon = True  # 设置为守护线程
-            recv_camera_thread.start()
+        # if user not in self.camera_threads:
+        # 为新用户启动线程
+        recv_camera_thread = threading.Thread(target=self.receive_camera, args=(user,))
+        recv_camera_thread.daemon = True  # 设置为守护线程
+        recv_camera_thread.start()
 
-            # 将新线程存储在字典中，方便管理
-            self.camera_threads[user] = recv_camera_thread
-            print(f"为用户 {user} 启动了一个线程")
+        # 将新线程存储在字典中，方便管理
+        self.camera_threads[user] = recv_camera_thread
+        print(f"为用户 {user} 启动了一个线程")
 
     def receive_camera_main(self):
         try:
@@ -477,7 +509,7 @@ class ConferenceClient:
 
                 user_name = recv_data[:8]  # 前8个字符
                 user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
-                if user not in self.camera_queues:
+                if user not in self.camera_last:
                     self.camera_last[user] = None
                     self.start_camera_thread(user)
 
