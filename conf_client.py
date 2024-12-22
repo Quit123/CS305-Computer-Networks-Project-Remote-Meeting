@@ -190,6 +190,8 @@ class ConferenceClient:
         self.multi_initiator = False
         self.conference_type = 1
         self.create_status = 0
+        self.cap.close()
+        self.stream.close()
         # Close all active connections
 
     def send_request(self, request_data):
@@ -326,15 +328,17 @@ class ConferenceClient:
             if self.acting_data_types['camera']:
                 if self.cap is None:
                     repeat = 0
-                    self.cap = cv2.VideoCapture(0)
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-                    self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
+                    self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
+                    # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+                    # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+                    self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
                 ret, frame = self.cap.read()
                 try:
                     if ret:
                         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
+                        #img_encode = cv2.imencode('.jpg', frame)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
 

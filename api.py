@@ -90,6 +90,7 @@ def Create():
     else:
         return jsonify({'status': 'fail', 'message': ans})
 
+
 # add new
 @app.route('/api/create_P2P', methods=['POST'])
 def Create_P2P():
