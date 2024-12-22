@@ -15,49 +15,11 @@ class ConferenceServer:
         self.title = title
         self.data_serve_ports = [port, port + 1, port + 2, port + 3]  # self.data_serve_ports=[]
         self.data_types = ['audio', 'screen', 'camera', 'text']  # example data types in a video conference
-        self.user_name = []
         self.conns = []
-        self.servers = []
-        self.online_users = 0
-        self.last_online_users = 0
-        self.last_join_user = "NULL"
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.run = True
         self.tasks = []
         self.owner = None
-
-    async def handle_data(self, reader: StreamReader, writer: StreamWriter, type):
-        """
-        running task: receive sharing stream data from a client and decide how to forward them to the rest clients
-        """
-        if type == 'audio':
-            conns = self.audio_conns
-        elif type == 'screen':
-            conns = self.screen_conns
-        elif type == 'camera':
-            conns = self.camera_conns
-        else:
-            conns = self.text_conns
-        if (writer not in conns):
-            conns.append(writer)
-        try:
-            while self.run:
-                data = await reader.read(1024)
-                if type == 'text':
-                    print(data.decode())
-                for w in self.audio_conns:  # 假设这是处理音频的连接列表
-                    if w != writer:
-                        w.write(data)
-                        await w.drain()
-            writer.close()
-            await writer.wait_closed()
-        except Exception as e:
-            client_address = writer.get_extra_info('peername')
-            print(f"Client {client_address[0]} disconnected unexpectedly.")
-            if client_address[0] == self.owner:
-                for server in self.servers:
-                    server.close()
-                    await server.wait_closed()
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter, message):
         """
@@ -65,40 +27,33 @@ class ConferenceServer:
         """
         message = message
         parts = message.strip().split(" ")
+        address = writer.get_extra_info('peername')
         if (parts[0].startswith('[COMMAND]')):
             if (parts[1] == "JOIN"):
-                if (parts[-1] not in self.user_name):
-                    self.user_name.append(parts[-1])
-                    self.online_users += 1
-                    self.last_join_user = parts[-1]
+                if (address not in self.conns):
+                    self.conns.append(address)
                     print(f"SUCCESS join confernece {self.title}")
                     writer.write(f"SUCCESS join confernece {self.title} {self.data_serve_ports[0]}".encode())
-                    print(writer)
                     await writer.drain()
                 else:
-                    writer.write("FAILURE wrong user".encode())
+                    writer.write("FAILURE already join".encode())
                     await writer.drain()
             elif (parts[1] == "QUIT"):
-                if parts[-1] in self.client_conns:
-                    self.user_name.remove(parts[-1])
-                    self.last_online_users -= 1
-                    self.online_users -= 1
-                    writer.write("SUCCESS quit confernece".encode())
+                if address in self.conns:
+                    self.conns.remove(address)
+                    writer.write(f"SUCCESS quit confernece".encode())
                     await writer.drain()
                 else:
-                    writer.write("FAILURE wrong user".encode())
+                    writer.write("FAILURE user not in meeting".encode())
                     await writer.drain()
+            elif (parts[1] == "CANCEL"):
+                self.run = False
+                self.conns = []
+                writer.write("SUCCESS cancel confernece".encode())
+                await writer.drain()
             else:
                 writer.write("FAILURE invalid command".encode())
                 await writer.drain()
-        elif parts[0].startswith('[ASK]'):
-            if self.online_users > self.last_online_users:
-                writer.write(f"[ANS]: YES {self.last_join_user} True".encode())
-                await writer.drain()
-            else:
-                writer.write("[ANS]: No False".encode())
-                await writer.drain()
-            self.last_online_users = self.online_users
         else:
             print("invalid message")
             writer.write("FAILURE invalid message".encode())
@@ -125,7 +80,7 @@ class ConferenceServer:
     async def udp_server1(self):
         loop = asyncio.get_running_loop()
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        buffer_size = 65535  # 设置为较大的值，例如 65535 字节
+        buffer_size = 65536  # 设置为较大的值，例如 65535 字节
         udp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)
         server_address = (SERVER_IP, self.data_serve_ports[0])
         udp_server_socket.bind(server_address)
@@ -146,7 +101,7 @@ class ConferenceServer:
     async def udp_server2(self):
         loop = asyncio.get_running_loop()
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        buffer_size = 400000  # 设置为较大的值，例如 65535 字节
+        buffer_size = 65536  # 设置为较大的值，例如 65535 字节
         udp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)
         server_address = (SERVER_IP, self.data_serve_ports[2])
         udp_server_socket.bind(server_address)
@@ -167,7 +122,7 @@ class ConferenceServer:
     async def udp_server3(self):
         loop = asyncio.get_running_loop()
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        buffer_size = 65535  # 设置为较大的值，例如 65535 字节
+        buffer_size = 65536  # 设置为较大的值，例如 65535 字节
         udp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)
         server_address = (SERVER_IP, self.data_serve_ports[3])
         udp_server_socket.bind(server_address)
@@ -212,9 +167,9 @@ class MainServer:
 
         # self.conference_conns = None (貌似没有用)
         self.conference_servers = {}  # 每个键值对包含一个会议ID和对应的 ConferenceServer 实例
-        self.conference_manager = {}  # 管理创建会议的客户端
+        self.conference_manager = {}  # 管理创建会议的客户端(根据会议号找主持人)
         self.reverse_conference_manager = {}  # conference_manager的反向映射
-        self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）
+        self.clients_info = {}  # 管理客户端加入的会议（记录该会议的）value是会议号
         self.manage_task = {}  # 管理每个会议协程
         self.user_conference = {}  # P2P模式下管理（主持人:会议号)
         self.P2P_conf_name = {}  # P2P模式下管理（会议号:会议名）
@@ -237,17 +192,17 @@ class MainServer:
             self.P2P_conf_name[conference_id] = title
         else:
             new_conference = ConferenceServer(conference_id, title, self.ports)  # 创建新会议服务器
-            client_address = writer.get_extra_info('peername')
-            new_conference.owner = client_address[0]
+            # client_address = writer.get_extra_info('peername')
+            new_conference.owner = writer
             self.conference_servers[conference_id] = new_conference  # 用会议id管理会议，便于加入等操作
-            self.conference_manager[conference_id] = (writer, reader)  # 用（writer, reader）唯一标识会议创建者（注：有时间的话去换成ip?）
+            self.conference_manager[conference_id] = writer  # 用writer唯一标识会议创建者（注：有时间的话去换成ip?）
             self.reverse_conference_manager[(writer, reader)] = conference_id
             task = asyncio.create_task(new_conference.start())
             self.manage_task[conference_id] = task
             writer.write(f'SUCCESS {conference_id} {self.ports}'.encode())
             print(self.ports)
             if self.ports == 8993:
-                self.ports=8000
+                self.ports = 8000
             else:
                 self.ports = self.ports + 4
             await writer.drain()
@@ -303,23 +258,19 @@ class MainServer:
                     writer.write(f'SUCCESS: Cancel Conference: {cid}'.encode())
                     await writer.drain()
             else:
-                if (writer, reader) in self.conference_manager.values():  # 如果该用户是会议主持人
-                    conference_id = self.reverse_conference_manager[(writer, reader)]  # 从反向映射表中找会议号
-                    await self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
-                    task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
-                    task.cancel()  # Cancel the task
-                    self.conference_manager.pop(conference_id)  # 删除（主持人，会议）记录
-                    self.reverse_conference_manager.pop((writer, reader))
-                    keys_to_delete = [k for k, v in self.clients_info.items() if v == conference_id]
-                    for k in keys_to_delete:
-                        self.clients_info.pop(k)
-                    self.conference_servers.pop(conference_id)  # 删除该会议
-                    writer.write(f'SUCCESS: Cancel Conference: {conference_id}'.encode())
-                    client_address = writer.get_extra_info('peername')
-                    print(f'{client_address[0]} cancel conference: {conference_id}')
-                    await writer.drain()
+                cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
+                # await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
+                # 此时会议服务器已经更换主持人
+                if writer == self.conference_manager[cid]:
+                    self.clients_info.pop((writer, reader))
+                    for k, v in self.clients_info.items():
+                        if v == cid:
+                            self.conference_manager[cid] = k  # 改变MainServer记录的主持人
+                            self.conference_servers[cid].owner = k  # 改变ConferenceServer的主持人
+                            k.write(f'You have already became the owner of conference {cid}'.encode())
+                            break
+                    await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
                 else:
-                    cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
                     await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
                     self.clients_info.pop((writer, reader))  # 该用户状态改为未加入任何会议
                     writer.write(f'SUCCESS: Quit Conference: {cid}'.encode())
@@ -331,23 +282,29 @@ class MainServer:
             await writer.drain()
         pass
 
-    # async def handle_cancel_conference(self, reader, writer, conference_id, message):
-    #     """
-    #     cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
-    #     """
-    #     if self.conference_manager[conference_id] == (writer, reader):  # 确认该用户是否有管理权限
-    #         self.conference_servers[conference_id].cancel_conference()  # 有的话发送给conference_server
-    #         task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
-    #         task.cancel()  # Cancel the task
-    #         self.conference_manager.pop((writer, reader))
-    #         for (w, r) in self.conference_servers[conference_id].clients_info:  # 删除所有参加该会议的人
-    #             self.clients_info.pop((w, r))
-    #         self.conference_servers.pop(conference_id)  # 删除该会议
-    #         writer.write(f'SUCCESS: Cancel Conference: {conference_id}'.encode())
-    #         await writer.drain()
-    #     else:
-    #         writer.write('Fail: Permission deny'.encode())
-    #         await writer.drain()
+    async def handle_cancel_conference(self, reader, writer, conference_id, message):
+        """
+        cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
+        """
+        if (writer, reader) in self.conference_manager.values():  # 如果该用户是会议主持人
+            conference_id = self.reverse_conference_manager[(writer, reader)]  # 从反向映射表中找会议号
+            await self.conference_servers[conference_id].handle_client(reader, writer,
+                                                                       message)  # 有的话发送给conference_server
+            task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
+            task.cancel()  # Cancel the task
+            self.conference_manager.pop(conference_id)  # 删除（主持人，会议）记录
+            self.reverse_conference_manager.pop((writer, reader))
+            keys_to_delete = [k for k, v in self.clients_info.items() if v == conference_id]
+            for k in keys_to_delete:
+                self.clients_info.pop(k)
+            self.conference_servers.pop(conference_id)  # 删除该会议
+            writer.write(f'SUCCESS: Cancel Conference: {conference_id}'.encode())
+            client_address = writer.get_extra_info('peername')
+            print(f'{client_address[0]} cancel conference: {conference_id}')
+            await writer.drain()
+        else:
+            writer.write('Fail: Permission deny'.encode())
+            await writer.drain()
 
     async def request_handler(self, reader, writer):
         """

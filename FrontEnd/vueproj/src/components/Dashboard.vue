@@ -170,7 +170,7 @@ export default {
 
       if (this.meeting.type === 'simple') {
         try {
-          const response = await axios.post('http://127.0.0.1:5000/api/create-simple', {
+          const response = await axios.post('http://127.0.0.1:5000/api/create-P2P', {
             title: this.meeting.title,
           });
           if (response.data.status === 'success') {

@@ -327,9 +327,9 @@ class ConferenceClient:
                 if self.cap is None:
                     repeat = 0
                     self.cap = cv2.VideoCapture(0)
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-                    self.cap.set(cv2.CAP_PROP_FPS, 15)  # 设置较低的帧率
+                    # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+                    # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+                    self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
                 ret, frame = self.cap.read()
                 try:
                     if ret:
