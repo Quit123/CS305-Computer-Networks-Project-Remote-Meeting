@@ -187,6 +187,14 @@ def update_camera_status():
     return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['camera']})
 
 
+@app.route('/api/update-screen-status', methods=['POST'])
+def update_screen_status():
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """前端通过 POST 请求更新 camera 状态"""
+    client_instance.share_switch('screen')
+    return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
+
+
 @socketio.on('message')
 def send_text(msg):
     # 自己发送的信息要传用户名
