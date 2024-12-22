@@ -194,7 +194,9 @@ def server_message_encrypt(message, client_instance):
             return recv_data
         else:
             print("conf_client.established_client:", client_instance.established_client)
+            # print("message: ", message)
             encrypted_message, encrypted_password = encrypt(3, cmd)
+            # print("encrypted_message: ", encrypted_message)
             client_instance.established_client.send(encrypted_message.encode("utf-8"))
             recv_data = server_response(client_instance.established_client, encrypted_password).decode("utf-8")
             return recv_data

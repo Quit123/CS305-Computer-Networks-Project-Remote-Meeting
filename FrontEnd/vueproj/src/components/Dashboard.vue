@@ -224,18 +224,26 @@ export default {
       //   message.error("获取简单会议列表失败：" + error.message);
       // }
     },
-    async joinMeeting() {
+    // async joinMeeting() {
+    //   if (!this.joinMeetingId) {
+    //     return message.error("请输入会议号！");
+    //   }
+    //   const response = await axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
+    //   console.log(response)
+    //   if (response.data.status === 'success') {
+    //     message.success("加入会议成功");
+    //     this.$router.push('/meeting');
+    //   } else {
+    //     message.error("加入会议失败：" + response.data.message);
+    //   }
+    // },
+    joinMeeting() {
       if (!this.joinMeetingId) {
         return message.error("请输入会议号！");
       }
-      const response = await axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
-      console.log(response)
-      if (response.data.status === 'success') {
-        message.success("加入会议成功");
-        this.$router.push('/meeting');
-      } else {
-        message.error("加入会议失败：" + response.data.message);
-      }
+      axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
+      message.success("加入会议成功");
+      this.$router.push('/meeting');
     },
     joinSimpleMeeting(meetingId) {
       try {

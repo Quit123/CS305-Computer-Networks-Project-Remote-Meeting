@@ -5,8 +5,11 @@
     </a-layout-header>
     <a-layout class="meeting-container">
       <a-layout-content class="video-section">
-        <!-- 只有一个视频容器 -->
-          <img ref="video" ></img>
+        <div class="video-grid">
+          <div v-for="(video, index) in videos" :key="index" class="video-container">
+            <canvas :ref="'video_' + video.user_id" width="640" height="360"/>
+          </div>
+        </div>
         <div class="controls">
           <a-switch checked-children="Camera On" un-checked-children="Camera Off" v-model:checked="cameraOn"
                     @change="toggleCamera"/>
@@ -30,7 +33,6 @@
   </a-layout>
 </template>
 
-
 <script>
 import { Button, Input, Layout, Switch } from 'ant-design-vue';
 import io from 'socket.io-client';
@@ -51,9 +53,10 @@ export default {
       tittle: 'SUSTeh CS303 Online Meeting App',
       messages: [],
       newMessage: '',
-      cameraOn: true,
+      cameraOn: false,
       microphoneOn: true,
       socket: null,
+      videos: [],
     };
   },
   methods: {
@@ -90,49 +93,40 @@ export default {
         console.log('WebSocket connected');
         this.socket.emit('video_stream', { user_id: 'your_user_id' });
       });
-      // this.socket.on('video_frame', (data) => {
-      //   const videoElement = this.$refs.video;
-      //   console.log('Received video frame:', data);  // 调试信息
-      //   if (videoElement) {
-      //     // 将接收到的视频帧数据转换为 Blob，并显示在视频元素上
-      //     const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
-      //     videoElement.src = URL.createObjectURL(videoBlob);
-      //
-      //     // 确保每次加载完成后释放 URL 对象，避免内存泄漏
-      //     videoElement.onload = () => {
-      //       console.log('Video loaded successfully');
-      //       URL.revokeObjectURL(videoElement.src);
-      //     };
-      //   }
-      // });
+
       this.socket.on('video_frame', (data) => {
-        console.log('Received video frame:', data.frame);
+        const videoElements = this.$refs['video_' + data.user_id];  // 获取 canvas 元素数组
 
-        // 找到对应的视频容器
-        let videoElement = document.querySelector('video');
+        if (videoElements && Array.isArray(videoElements)) {
+          videoElements.forEach((videoElement) => {
+            // 确保 videoElement 是 canvas 元素
+            if (videoElement.getContext) {
+              const ctx = videoElement.getContext('2d');
+              const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
+              const img = new Image();
 
-        // 如果视频容器不存在，创建一个
-        if (!videoElement) {
-          videoElement = document.createElement('video');
-          videoElement.autoplay = true;  // 设置自动播放
-          document.body.appendChild(videoElement);  // 将其添加到页面
+              // 确保每次加载完成后释放 URL 对象，避免内存泄漏
+              img.onload = () => {
+                console.log('Video frame loaded successfully');
+                ctx.drawImage(img, 0, 0, videoElement.width, videoElement.height);
+                URL.revokeObjectURL(img.src);  // 释放内存
+              };
+              img.src = URL.createObjectURL(videoBlob);  // 创建图像 URL
+            } else {
+              console.error('The element is not a valid canvas');
+            }
+          });
+        } else {
+          console.warn(`Canvas for user ${data.user_id} not found.`);
+          this.videos.push({ user_id: data.user_id });
         }
-
-        // 使用 Blob 将图像数据转换为视频源
-        const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
-
-        // 将图像数据作为 URL 设置为 video 元素的源
-        videoElement.src = URL.createObjectURL(videoBlob);
-
-        // 清除 URL 对象（可以在图片加载后触发）
-        videoElement.onload = () => {
-          URL.revokeObjectURL(videoElement.src);
-        };
       });
+
       this.socket.on('message', (msg) => {
         this.messages.push(msg);
       });
-    },
+    }
+
   },
   mounted() {
     this.connectToSocket();
@@ -145,7 +139,6 @@ export default {
 };
 </script>
 
-
 <style scoped>
 .meeting-container {
   height: 60vh;
@@ -157,23 +150,6 @@ export default {
   display: flex;
   flex-direction: column;
   padding: 10px;
-}
-
-.video-container {
-  position: relative;
-  padding-top: 56.25%; /* 16:9 aspect ratio */
-  background: black;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.video-container video {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .controls {
@@ -224,4 +200,32 @@ export default {
   background-color: darkred;
   border-color: darkred;
 }
+
+.video-section {
+  display: flow-root;
+  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr)); /* 自动根据容器宽度填充视频 */
+  gap: 10px; /* 控制视频间距 */
+  justify-content: center;
+  align-items: center;
+}
+
+.video-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+}
+
+.video-container {
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  position: relative;
+}
+
+.video-container canvas {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
 </style>
