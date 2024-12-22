@@ -241,13 +241,13 @@ class ConferenceClient:
         # send_text_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         # send_text_thread.start()
 
-        send_audio_thread = threading.Thread(target=self.send_audio_text)
+        send_audio_thread = threading.Thread(target=self.send_audio_text_camera)
         send_audio_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         send_audio_thread.start()
 
-        send_camera_thread = threading.Thread(target=self.send_camera)
-        send_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        send_camera_thread.start()
+        # send_camera_thread = threading.Thread(target=self.send_camera)
+        # send_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        # send_camera_thread.start()
 
         send_screen_thread = threading.Thread(target=self.send_screen)
         send_screen_thread.daemon = True
@@ -265,6 +265,10 @@ class ConferenceClient:
         recv_camera_thread = threading.Thread(target=self.receive_camera_main)
         recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_camera_thread.start()
+
+        recv_screen_thread = threading.Thread(target=self.receive_screen)
+        recv_screen_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        recv_screen_thread.start()
 
     def send_screen(self):
         socket_screen = self.sockets['screen']
@@ -310,14 +314,17 @@ class ConferenceClient:
                 socket_text.sendto(message, (target_address, port))
                 self.text = None
 
-    def send_audio_text(self):
+    def send_audio_text_camera(self):
         try:
             self.stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
             socket_audio = self.sockets['audio']
             socket_text = self.sockets['text']
+            socket_camera = self.sockets['camera']
+            repeat = 0
             target_address = self.server_addr[0]  # 目标服务器的 IP 地址
             port_audio = self.ports.get('audio')  # 获取对应的端口
             port_text = self.ports.get('text')  # 获取对应的端口
+            port_camera = self.ports.get('camera')  # 获取对应的端口
             print("run function of send text")
             print("run function of send audio")
             while self.on_meeting:
@@ -358,6 +365,48 @@ class ConferenceClient:
                     # established_text.send(self.text.encode('utf-8'))
                     socket_text.sendto(message, (target_address, port_text))
                     self.text = None
+
+                if self.acting_data_types['camera']:
+                    if self.cap is None:
+                        repeat = 0
+                        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
+                        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+                        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+                        self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
+                    ret, frame = self.cap.read()
+                    try:
+                        if ret:
+                            # frame = np.array(frame)
+                            # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
+                            # img_encoded = cv2.imencode('.jpg', frame, encode_param)[1]
+                            # image_data = img_encoded.tobytes()
+                            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
+                            img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
+                            data_encode = np.array(img_encode)
+                            image_data = data_encode.tobytes()
+
+                            message = b''
+                            user_bytes = self.user_name.encode('utf-8')
+                            message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
+                            socket_camera.sendto(message, (target_address, port_camera))
+                    except ConnectionAbortedError as e:
+                        print(f"[Error]: Connection aborted: {e}")
+                else:
+                    if repeat == 0:
+                        black_frame = np.zeros((camera_height, camera_width, 3), dtype=np.uint8)
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
+                        img_encode = cv2.imencode('.jpg', black_frame, encode_param)[1]
+                        image_data = img_encode.tobytes()
+
+                        message = b''
+                        user_bytes = self.user_name.encode('utf-8')
+                        message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
+                        socket_camera.sendto(message, (target_address, port_camera))
+                        repeat = 1
+                    if self.cap is not None:
+                        self.cap.release()
+                        self.cap = None
         except Exception as e:
             print(f"[Error]: Error in send_audio: {e}")
 
@@ -502,9 +551,18 @@ class ConferenceClient:
                     # camera_data_bytes = nparr.tobytes()
                     self.camera_last[default_user] = camera_data
                     api.recv_camera(default_user, camera_data)
-
         except Exception as e:
             print(f"[Error]: An error occurred in receive_camera: {e}")
+
+    def receive_screen(self):
+        try:
+            socket_screen = self.sockets['screen']
+            print("[Info]: Starting screen playback monitoring...")
+            while self.on_meeting:
+                recv_data, addr = socket_screen.recvfrom(400000)
+                api.recv_screen(recv_data)
+        except Exception as e:
+            print(f"[Error]: An error occurred in receive_screen: {e}")
 
     def share_switch(self, data_type):
         """

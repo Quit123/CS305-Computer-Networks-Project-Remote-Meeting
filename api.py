@@ -147,12 +147,12 @@ def Join():
 
 
 @app.route('/api/quit', methods=['POST'])
-def Quit():
+async def Quit():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     # global quit
     # quit = True
-    client_instance.quit_conference()
+    await client_instance.quit_conference()
     # if username in users and users[username] == password:
     return jsonify({'status': 'success', 'message': 'Click quit return'})
 
@@ -223,6 +223,12 @@ def recv_camera(user, frame):
     socketio.emit('video_frame', {
         "user_id": user,
         "frame": frame
+    })
+
+
+def recv_screen(screen_frame):
+    socketio.emit('screen_frame', {
+        "screen_frame": screen_frame
     })
 
 
