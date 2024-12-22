@@ -320,7 +320,7 @@ class MainServer:
                     await writer.drain()
                 else:
                     cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
-                    self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
+                    await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
                     self.clients_info.pop((writer, reader))  # 该用户状态改为未加入任何会议
                     writer.write(f'SUCCESS: Quit Conference: {cid}'.encode())
                     client_address = writer.get_extra_info('peername')
