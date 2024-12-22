@@ -191,8 +191,11 @@ def update_camera_status():
 def update_screen_status():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求更新 camera 状态"""
-    client_instance.share_switch('screen')
-    return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
+    response = client_instance.share_switch('screen')
+    if "SUCCESS" in response:
+        return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
+    else:
+        return jsonify({'status': 'fail', 'camera_status': response})
 
 
 @socketio.on('message')

@@ -218,7 +218,7 @@ class ConferenceClient:
         self.create_status = 0
 
         if self.cap is not None:
-            self.cap.close()
+            self.cap.release()
         if self.stream is not None:
             self.stream.close()
         # Close all active connections
@@ -561,10 +561,16 @@ class ConferenceClient:
             print(f"[Warn]: Data type {data_type} is not supported.")
             return
         if self.acting_data_types[data_type]:
+            if data_type == "screen":
+                self.send_request(f"[COMMAND]: CLOSE SCREEN")
             self.acting_data_types[data_type] = False
             print(f"[Info]: Closing sharing for {data_type}...")
         else:
-            self.acting_data_types[data_type] = True
+            if data_type == "screen":
+                response = self.send_request(f"[COMMAND]: OPEN SCREEN")
+                return response
+            else:
+                self.acting_data_types[data_type] = True
             print(f"[Info]: Opening sharing for {data_type}...")
 
         # Implementation for toggling data sharing
