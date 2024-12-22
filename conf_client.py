@@ -111,7 +111,7 @@ class ConferenceClient:
             print(f"[Error]: Failed to create conference: {response}")
             return f"[Error]: Failed to create conference: {response}"
 
-    def join_conference(self, conference_id, type):
+    def join_conference(self, conference_id):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
@@ -128,11 +128,12 @@ class ConferenceClient:
         print(request_data)
         response = self.send_request(request_data)
         if "SUCCESS" in response:
+            if "P2P" in response:
+                self.conference_type = 2
             if self.ports['audio'] == 0:
-                self.set_ports(response, type)
-            if type == 2 and not self.p2p_initiator:
-                ip_address = response.split()[-1]
-                self.server_addr = (ip_address, self.server_addr[1])
+                self.set_ports(response, self.conference_type)
+            if self.conference_type == 2 and not self.p2p_initiator:
+                self.server_addr = (response.split()[-1], self.server_addr[1])
             self.conference_id = conference_id
             self.on_meeting = True
             self.start_conference()
@@ -152,7 +153,10 @@ class ConferenceClient:
             print("[Warn]: Not currently in any meeting.")
             return
         print("[Info]: Quitting conference...")
-        request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
+        if self.conference_type == 1:
+            request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
+        else:
+            request_data = f"[COMMAND]: QUIT P2P ID{self.user_name} {self.conference_id}"
         response = self.send_request(request_data)
         if "SUCCESS" in response:
             self.close_conference()
@@ -165,7 +169,10 @@ class ConferenceClient:
         cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
         print("[Info]: Cancelling conference...")
-        request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
+        if self.conference_type == 1:
+            request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
+        else:
+            request_data = f"[COMMAND]: CANCEL P2P id {self.conference_id} {self.user_name}"
         response = await self.send_request(request_data)
         if response.startswith("SUCCESS"):
             self.close_conference()
@@ -382,6 +389,7 @@ class ConferenceClient:
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
+                        api.recv_camera(self.user_name, image_data)
 
                         message = b''
                         user_bytes = self.user_name.encode('utf-8')

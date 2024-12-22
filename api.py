@@ -116,6 +116,21 @@ def Create_P2P():
         return jsonify({'status': 'fail', 'message': ans})
 
 
+@app.route('/api/join', methods=['POST'])
+def Join():
+    client_instance = app.config.get('CLIENT_INSTANCE')
+    """Handle POST request for user login"""
+    con_in = request.json
+    con_id = con_in.get('con_id')
+    print("join conference:", con_id)
+    con_id = con_id + " " + client_instance.user_name
+    result = client_instance.join_conference(con_id)
+    if 'Success' in result:
+        return jsonify({'status': 'success', 'message': result})
+    else:
+        return jsonify({'status': 'fail', 'message': result})
+
+
 # add new
 @app.route('/api/check_list', methods=['POST'])
 def Check_list():
@@ -129,21 +144,6 @@ def Check_list():
     else:
         print(jsonify({'status': 'success', 'message': response}))
         return jsonify({'status': 'success', 'message': response})
-
-
-@app.route('/api/join', methods=['POST'])
-def Join():
-    client_instance = app.config.get('CLIENT_INSTANCE')
-    """Handle POST request for user login"""
-    con_in = request.json
-    con_id = con_in.get('con_id')
-    print("join conference:", con_id)
-    con_id = con_id + " " + client_instance.user_name
-    result = client_instance.join_conference(con_id, client_instance.conference_type)
-    if 'Success' in result:
-        return jsonify({'status': 'success', 'message': result})
-    else:
-        return jsonify({'status': 'fail', 'message': result})
 
 
 @app.route('/api/quit', methods=['POST'])
