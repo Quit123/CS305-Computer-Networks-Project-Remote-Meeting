@@ -263,6 +263,11 @@ class ConferenceClient:
             print("[Info]: You are host")
             api.recv_host_info(info)
             self.host = True
+        if "QUIT" in info:
+            print("[Info]: Quit is running")
+            api.recv_quit(info)
+            self.close_conference()
+
 
     def send_info(self):
         """
@@ -413,6 +418,7 @@ class ConferenceClient:
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
+                        # 个人显示
                         api.recv_camera(self.user_name, image_data)
 
                         message = b''
@@ -513,9 +519,9 @@ class ConferenceClient:
                     self.camera_last[user] = None
                     self.start_camera_thread(user)
 
-                if user == self.user_name:
-                    camera_data = recv_data[8:]  # 后面的数据
-                    api.recv_camera(self.user_name, camera_data)
+                # if user == self.user_name:
+                #     camera_data = recv_data[8:]  # 后面的数据
+                #     api.recv_camera(self.user_name, camera_data)
 
                     # self.frame = img_decode
         except Exception as e:

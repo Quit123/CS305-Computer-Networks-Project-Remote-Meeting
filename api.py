@@ -237,6 +237,12 @@ def recv_host_info(message):
         "message": message
     })
 
+
+def recv_quit(message):
+    socketio.emit('quit_info', {
+        "message": message
+    })
+
 # @socketio.on('me')
 # def rev_text(msg):
 #     send(msg, broadcast=True)
