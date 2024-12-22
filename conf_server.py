@@ -76,7 +76,8 @@ class ConferenceServer:
         await asyncio.gather(
             self.udp_server1(),
             self.udp_server2(),
-            self.udp_server3()
+            self.udp_server3(),
+            self.udp_server4()
         )
 
     async def udp_server1(self):
