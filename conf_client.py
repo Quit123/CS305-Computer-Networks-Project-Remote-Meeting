@@ -190,6 +190,8 @@ class ConferenceClient:
         self.multi_initiator = False
         self.conference_type = 1
         self.create_status = 0
+        self.cap.close()
+        self.stream.close()
         # Close all active connections
 
     def send_request(self, request_data):
@@ -326,7 +328,8 @@ class ConferenceClient:
             if self.acting_data_types['camera']:
                 if self.cap is None:
                     repeat = 0
-                    self.cap = cv2.VideoCapture(0)
+                    self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
                     # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
                     # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
                     self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
@@ -335,6 +338,7 @@ class ConferenceClient:
                     if ret:
                         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
                         img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
+                        #img_encode = cv2.imencode('.jpg', frame)[1]
                         data_encode = np.array(img_encode)
                         image_data = data_encode.tobytes()
 
@@ -449,10 +453,10 @@ class ConferenceClient:
                 user = user_name.decode('utf-8').strip('\0')  # 解码并去掉填充的 '\0'
                 if user == default_user:
                     camera_data = recv_data[8:]  # 后面的数据
-                    nparr = np.frombuffer(camera_data, np.uint8)
-                    camera_data_bytes = nparr.tobytes()
-                    self.camera_last[default_user] = camera_data_bytes
-                    api.recv_camera(default_user, camera_data_bytes)
+                    # nparr = np.frombuffer(camera_data, np.uint8)
+                    # camera_data_bytes = nparr.tobytes()
+                    self.camera_last[default_user] = camera_data
+                    api.recv_camera(default_user, camera_data)
 
         except Exception as e:
             print(f"[Error]: An error occurred in receive_camera: {e}")
