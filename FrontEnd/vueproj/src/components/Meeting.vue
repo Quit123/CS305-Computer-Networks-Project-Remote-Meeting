@@ -20,6 +20,13 @@
                     @change="toggleMicrophone"/>
           <a-button type="primary" class="exit-button" @click="exitMeeting">Exit Meeting</a-button>
           <a-button type="danger" class="cancel-button" @click="cancelMeeting">Cancel Meeting</a-button>
+          <a-button
+            :type="isSharingScreen ? 'danger' : 'default'"
+            @click="toggleScreenShare"
+            class="hover-button"
+          >
+            {{ isSharingScreen ? 'Close Share' : 'Share Screen' }}
+          </a-button>
         </div>
       </a-layout-content>
       <a-layout-sider class="chat-section" :width="250">
@@ -61,6 +68,7 @@ export default {
       microphoneOn: true,
       socket: null,
       videos: [],
+      isSharingScreen: false,
     };
   },
   methods: {
@@ -113,6 +121,33 @@ export default {
         this.socket.emit('video_stream', { user_id: 'your_user_id' });
       });
 
+      this.socket.on('host_info', (data) => {
+        console.log('Host info:', data);
+        data.message.success("主机信息：" + data);
+      });
+
+      this.socket.on('quit_info', (data) => {
+        console.log('Quit info:', data);
+        data.message.success("退出信息：" + data);
+        this.$router.push('/dashboard');
+      });
+
+      this.socket.on('screen_frame', (data) => {
+        const screenCanvas = this.$refs.screenCanvas;  // 获取 canvas 元素
+
+        const ctx = screenCanvas.getContext('2d');
+        const screenBlob = new Blob([data.screen_frame], { type: 'image/jpeg' });
+        const img = new Image();
+
+        // 确保每次加载完成后释放 URL 对象，避免内存泄漏
+        img.onload = () => {
+          console.log('Screen frame loaded successfully');
+          ctx.drawImage(img, 0, 0, screenCanvas.width, screenCanvas.height);
+          URL.revokeObjectURL(img.src);  // 释放内存
+        };
+        img.src = URL.createObjectURL(screenBlob);  // 创建图像 URL
+      });
+
       this.socket.on('video_frame', (data) => {
         const videoElements = this.$refs['video_' + data.user_id];  // 获取 video 元素
 
@@ -144,8 +179,11 @@ export default {
       this.socket.on('message', (msg) => {
         this.messages.push(msg);
       });
+    },
+    toggleScreenShare() {
+      axios.post('http://127.0.0.1:5000/api/update-screen-status');
+      this.isSharingScreen = !this.isSharingScreen;
     }
-
   },
   mounted() {
     this.connectToSocket();
@@ -179,7 +217,7 @@ export default {
 
 .video-container {
   width: 25%; /* 四个视频元素平分宽度 */
-  height: 2px; /* 增加高度 */
+  height: 160px; /* 增加高度 */
 }
 
 .screen-share {
@@ -258,4 +296,11 @@ export default {
   background-color: darkred;
   border-color: darkred;
 }
+
+.hover-button {
+  /*固定尺寸*/
+  width: 120px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
 </style>

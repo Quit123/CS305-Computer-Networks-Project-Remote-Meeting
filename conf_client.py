@@ -12,6 +12,7 @@ import threading
 import time
 import datetime
 import io
+import mss
 
 established_client = None
 
@@ -50,6 +51,7 @@ class ConferenceClient:
         self.multi_initiator = False
         self.create_status = 0
         self.host = False
+        self.allow_quit = False
 
     def check_status(self):
         while self.create_status == 0:
@@ -157,14 +159,17 @@ class ConferenceClient:
             request_data = f"[COMMAND]: QUIT ID {self.conference_id} {self.user_name}"
         else:
             request_data = f"[COMMAND]: QUIT P2P ID{self.user_name} {self.conference_id}"
-        response = self.send_request(request_data)
-        if "SUCCESS" in response:
-            self.close_conference()
-            print("[Success]: Successfully quit the conference.")
-        else:
-            print(f"[Error]: Failed to quit conference: {response}")
 
-    async def cancel_conference(self):
+        self.established_client.sendall(request_data.encode())
+
+        # response = self.send_request(request_data)
+        # if "SUCCESS" in response:
+        #     self.close_conference()
+        #     print("[Success]: Successfully quit the conference.")
+        # else:
+        #     print(f"[Error]: Failed to quit conference: {response}")
+
+    def cancel_conference(self):
         """
         cancel your ongoing conference (when you are the conference manager): ask server to close all clients
         """
@@ -173,12 +178,14 @@ class ConferenceClient:
             request_data = f"[COMMAND]: CANCEL id {self.conference_id} {self.user_name}"
         else:
             request_data = f"[COMMAND]: CANCEL P2P id {self.conference_id} {self.user_name}"
-        response = await self.send_request(request_data)
-        if response.startswith("SUCCESS"):
-            self.close_conference()
-            print("[Success]: Conference cancelled successfully.")
-        else:
-            print(f"[Error]: Failed to cancel conference: {response}")
+
+        self.established_client.sendall(request_data.encode())
+        # response = await self.send_request(request_data)
+        # if response.startswith("SUCCESS"):
+        #     self.close_conference()
+        #     print("[Success]: Conference cancelled successfully.")
+        # else:
+        #     print(f"[Error]: Failed to cancel conference: {response}")
 
     def start_conference(self):
         """
@@ -213,6 +220,7 @@ class ConferenceClient:
 
         self.host = False
         self.can_share_screen = True
+        self.allow_quit = False
 
         self.conference_type = 1
         self.create_status = 0
@@ -221,6 +229,8 @@ class ConferenceClient:
             self.cap.release()
         if self.stream is not None:
             self.stream.close()
+
+        print("conference has closed")
         # Close all active connections
 
         # 用来存不同类型的socket
@@ -253,15 +263,28 @@ class ConferenceClient:
         recv_change_info.start()
 
     def recv_host(self):
-        info = established_client.recv(1024).decode()
-        if "HOST" in info:
-            print("[Info]: You are host")
-            api.recv_host_info(info)
-            self.host = True
-        if "QUIT" in info:
-            print("[Info]: Quit is running")
-            api.recv_quit(info)
-            self.close_conference()
+        while self.on_meeting:
+            info = established_client.recv(1024).decode()
+            if "HOST" in info:
+                print("[Info]: You are host")
+                api.recv_host_info(info)
+                self.host = True
+            if "QUIT" in info:
+                # 前端主动退出，应该不需要api.recv_quit(info)
+                print("[Info]: Quit is running")
+                api.recv_quit(info)
+                self.allow_quit = True
+                self.close_conference()
+            if "CANCEL FAIL" in info:
+                print("[Info]: You are not host")
+                self.allow_quit = False
+            if "SUCCESS SCREEN" in info:
+                self.acting_data_types["screen"] = True
+                print("screen is sharing")
+            if "FAIL SCREEN" in info:
+                self.acting_data_types["screen"] = False
+                print("screen can't share")
+            time.sleep(0.1)
 
 
     def send_info(self):
@@ -297,9 +320,9 @@ class ConferenceClient:
         recv_camera_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
         recv_camera_thread.start()
 
-        # recv_screen_thread = threading.Thread(target=self.receive_screen)
-        # recv_screen_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
-        # recv_screen_thread.start()
+        recv_screen_thread = threading.Thread(target=self.receive_screen)
+        recv_screen_thread.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        recv_screen_thread.start()
 
     def send_texts(self):
         socket_text = self.sockets['text']
@@ -356,8 +379,9 @@ class ConferenceClient:
                         print(f"[Error]: Unexpected error during audio send: {e}")
                         break  # 捕获其他异常，退出循环
                 else:
-                    self.stream.close()  # 关闭流
-                    self.stream = None
+                    if self.stream is not None:
+                        self.stream.close()  # 关闭流
+                        self.stream = None
 
                 if self.text:
 
@@ -374,7 +398,7 @@ class ConferenceClient:
                     socket_text.sendto(message, (target_address, port_text))
                     self.text = None
         except Exception as e:
-            print(f"[Error]: Error in send_audio: {e}")
+            print(f"[Error]: Error in send_audio_text: {e}")
 
     def send_screen(self):
         socket_screen = self.sockets['screen']
@@ -384,11 +408,11 @@ class ConferenceClient:
         while self.on_meeting:
             if self.acting_data_types['screen']:
                 img = pyautogui.screenshot()
+                img = np.array(img)
                 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
                 img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
-                img = np.array(img_encoded)
-                compressed_image_data = img.tobytes()
-
+                compressed_image_data = img_encoded.tobytes()
+                api.recv_screen(compressed_image_data)
                 socket_screen.sendto(compressed_image_data, (target_address, port))
 
     def send_camera(self):
@@ -397,23 +421,42 @@ class ConferenceClient:
         port_camera = self.ports.get('camera')  # 获取对应的端口
         socket_screen = self.sockets['screen']
         port_screen = self.ports.get('screen')  # 获取对应的端口
-        print("run function of send screen")
         repeat = 0
+        repeat_sc = 0
+        frame_counter = 0
+        max_udp_size = 65000
+        print("run function of send screen")
         print("run function of send camera")
-        while self.on_meeting:
-            if self.acting_data_types['camera']:
-                if self.cap is None:
-                    repeat = 0
-                    self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
-                    self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
-                ret, frame = self.cap.read()
-                try:
-                    if ret:
-                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
-                        img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
-                        data_encode = np.array(img_encode)
-                        image_data = data_encode.tobytes()
+        with mss.mss() as sct:
+            while self.on_meeting:
+                if self.acting_data_types['camera']:
+                    if self.cap is None:
+                        repeat = 0
+                        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
+                        self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
+                    ret, frame = self.cap.read()
+                    try:
+                        if ret:
+                            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
+                            img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
+                            data_encode = np.array(img_encode)
+                            image_data = data_encode.tobytes()
+                            # 个人显示
+                            api.recv_camera(self.user_name, image_data)
+
+                            message = b''
+                            user_bytes = self.user_name.encode('utf-8')
+                            message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
+                            camera_socket.sendto(message, (target_address, port_camera))
+                    except ConnectionAbortedError as e:
+                        print(f"[Error]: Connection aborted: {e}")
+                else:
+                    if repeat <= 3:
+                        black_frame = np.zeros((camera_height, camera_width, 3), dtype=np.uint8)
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
+                        img_encode = cv2.imencode('.jpg', black_frame, encode_param)[1]
+                        image_data = img_encode.tobytes()
                         # 个人显示
                         api.recv_camera(self.user_name, image_data)
 
@@ -421,31 +464,96 @@ class ConferenceClient:
                         user_bytes = self.user_name.encode('utf-8')
                         message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
                         camera_socket.sendto(message, (target_address, port_camera))
-                except ConnectionAbortedError as e:
-                    print(f"[Error]: Connection aborted: {e}")
-            else:
-                if repeat == 0:
-                    black_frame = np.zeros((camera_height, camera_width, 3), dtype=np.uint8)
-                    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
-                    img_encode = cv2.imencode('.jpg', black_frame, encode_param)[1]
-                    image_data = img_encode.tobytes()
+                        repeat = repeat + 1
+                    if self.cap is not None:
+                        self.cap.release()
+                        self.cap = None
 
-                    message = b''
-                    user_bytes = self.user_name.encode('utf-8')
-                    message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
-                    camera_socket.sendto(message, (target_address, port_camera))
-                    repeat = 1
-                if self.cap is not None:
-                    self.cap.release()
-                    self.cap = None
-
-            if self.acting_data_types['screen']:
-                img = pyautogui.screenshot()
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
-                img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
-                img = np.array(img_encoded)
-                compressed_image_data = img.tobytes()
-                socket_screen.sendto(compressed_image_data, (target_address, port_screen))
+                if self.acting_data_types['screen']:
+                    # 捕获屏幕
+                    # screenshot = sct.shot(output='screenshot.png', mon=-1)  # mon=-1 获取主屏
+                    # img = cv2.imread(screenshot)  # 读取图片为 OpenCV 图像格式
+                    #
+                    # # 设置 JPEG 压缩质量为更高的质量，减少损失
+                    # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40] # 40 是较低质量，如果需要更高质量可以调整
+                    # img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                    # compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
+                    #
+                    # api.recv_screen(compressed_image_data)
+                    #
+                    # # 发送屏幕图像数据
+                    # if frame_counter >= 65530:
+                    #     frame_counter = 0
+                    #
+                    # # 分块发送大数据包
+                    # if len(compressed_image_data) > max_udp_size:
+                    #     for i in range(0, len(compressed_image_data), max_udp_size):
+                    #         chunk = compressed_image_data[i:i + max_udp_size]
+                    #         identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                    #         chunk_with_identifier = identifier + chunk
+                    #         socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                    #     frame_counter += 1
+                    # else:
+                    #     # 直接发送小数据包
+                    #     identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                    #     chunk_with_identifier = identifier + compressed_image_data
+                    #     socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                    #     frame_counter += 1
+                    # time.sleep(0.033)  # 控制帧率（30fps）
+                    img = pyautogui.screenshot()  # 获取屏幕截图
+                    img = np.array(img)  # 转换为 NumPy 数组
+                    # 设置 JPEG 压缩质量
+                    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+                    img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                    compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
+                    api.recv_screen(compressed_image_data)
+                    if frame_counter >= 65530:
+                        frame_counter = 0
+                    # 计算分块大小，保持每个块的大小适合 UDP 传输
+                    if len(compressed_image_data) > max_udp_size:
+                        # print(f"Data size {len(compressed_image_data)} exceeds max UDP size, splitting...")
+                        for i in range(0, len(compressed_image_data), max_udp_size):
+                            chunk = compressed_image_data[i:i + max_udp_size]
+                            # 生成16位标识符（frame_counter）并打包为2字节
+                            identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                            # 拼接标识符和数据块
+                            chunk_with_identifier = identifier + chunk
+                            # 发送数据块
+                            socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                        # 增加帧计数器
+                        frame_counter += 1
+                    else:
+                        # 对于小于最大 UDP 大小的数据，直接发送
+                        identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                        chunk_with_identifier = identifier + compressed_image_data
+                        socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                        # 增加帧计数器
+                        frame_counter += 1
+                else:
+                    if repeat_sc < 3:
+                        # 如果为False，发送全黑色图像
+                        height, width = 1080, 1920  # 假设屏幕大小为 1920x1080
+                        black_image = np.zeros((height, width, 3), dtype=np.uint8)  # 创建一个全黑图像
+                        # 设置 JPEG 压缩质量
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+                        img_encoded = cv2.imencode('.jpg', black_image, encode_param)[1]
+                        compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
+                        # 发送全黑图像
+                        if frame_counter >= 65530:
+                            frame_counter = 0
+                        if len(compressed_image_data) > max_udp_size:
+                            for i in range(0, len(compressed_image_data), max_udp_size):
+                                chunk = compressed_image_data[i:i + max_udp_size]
+                                identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                                chunk_with_identifier = identifier + chunk
+                                socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                            frame_counter += 1
+                        else:
+                            identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                            chunk_with_identifier = identifier + compressed_image_data
+                            socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                            frame_counter += 1
+                        repeat_sc = repeat_sc + 1
 
 
     def receive_text(self, decompress=None):
@@ -543,15 +651,58 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: An error occurred in receive_camera: {e}")
 
+    # def receive_screen(self):
+    #     try:
+    #         socket_screen = self.sockets['screen']
+    #         print("[Info]: Starting screen playback monitoring...")
+    #         id = 0
+    #         complete_data = b''
+    #         while self.on_meeting:
+    #             # 接收数据
+    #             recv_data, addr = socket_screen.recvfrom(400000)  # 假设最大UDP数据包大小为 400KB
+    #             if recv_data:
+    #                 identifier = recv_data[:2]  # 前 2 字节是标识符
+    #                 frame_counter = int.from_bytes(identifier, byteorder='big')
+    #                 if id != frame_counter:
+    #                     if complete_data:
+    #                         np_arr = np.frombuffer(complete_data, dtype=np.uint8)
+    #                         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    #                         if img is not None:
+    #                             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    #                             api.recv_screen(img_rgb)
+    #                         else:
+    #                             print(f"[Error]: Failed to decode image")
+    #                     id = frame_counter
+    #                     complete_data = b''
+    #                 chunk = recv_data[2:]
+    #                 complete_data += chunk
+    #     except Exception as e:
+    #         print(f"[Error]: {e}")
     def receive_screen(self):
         try:
             socket_screen = self.sockets['screen']
             print("[Info]: Starting screen playback monitoring...")
+            id = 0
+            complete_data = b''
             while self.on_meeting:
                 recv_data, addr = socket_screen.recvfrom(400000)
-                api.recv_screen(recv_data)
+                if recv_data:
+                    identifier = recv_data[:2]  # 前 2 字节是标识符
+                    frame_counter = int.from_bytes(identifier, byteorder='big')
+                    if id != frame_counter:
+                        if complete_data:
+                            # 解码图像数据并转换为RGB
+                            np_arr = np.frombuffer(complete_data, dtype=np.uint8)
+                            # img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                            # img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                            api.recv_screen(np_arr)
+                        id = frame_counter
+                        complete_data = b''
+                    chunk = recv_data[2:]
+                    complete_data += chunk
         except Exception as e:
-            print(f"[Error]: An error occurred in receive_screen: {e}")
+            print(f"[Error]: {e}")
+
 
     def share_switch(self, data_type):
         """
@@ -562,16 +713,19 @@ class ConferenceClient:
             return
         if self.acting_data_types[data_type]:
             if data_type == "screen":
-                self.send_request(f"[COMMAND]: CLOSE SCREEN")
+                command = "[COMMAND]: CLOSE SCREEN"
+                self.established_client.sendall(command.encode('utf-8'))
             self.acting_data_types[data_type] = False
             print(f"[Info]: Closing sharing for {data_type}...")
         else:
             if data_type == "screen":
-                response = self.send_request(f"[COMMAND]: OPEN SCREEN")
-                return response
+                command = "[COMMAND]: OPEN SCREEN"
+                self.established_client.sendall(command.encode('utf-8'))
+                print("request open screen...")
+                # response = await self.send_request(f"[COMMAND]: OPEN SCREEN")
             else:
                 self.acting_data_types[data_type] = True
-            print(f"[Info]: Opening sharing for {data_type}...")
+                print(f"[Info]: Opening sharing for {data_type}...")
 
         # Implementation for toggling data sharing
 
