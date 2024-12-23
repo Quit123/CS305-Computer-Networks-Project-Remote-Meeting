@@ -118,7 +118,7 @@ export default {
       this.socket = io('http://127.0.0.1:5000');
       this.socket.on('connect', () => {
         console.log('WebSocket connected');
-        this.socket.emit('video_stream', { user_id: 'your_user_id' });
+        this.socket.emit('video_stream', {user_id: 'your_user_id'});
       });
 
       this.socket.on('host_info', (data) => {
@@ -136,7 +136,7 @@ export default {
         const screenCanvas = this.$refs.screenCanvas;  // 获取 canvas 元素
 
         const ctx = screenCanvas.getContext('2d');
-        const screenBlob = new Blob([data.screen_frame], { type: 'image/jpeg' });
+        const screenBlob = new Blob([data.screen_frame], {type: 'image/jpeg'});
         const img = new Image();
 
         // 确保每次加载完成后释放 URL 对象，避免内存泄漏
@@ -156,7 +156,7 @@ export default {
             // 确保 videoElement 是 canvas 元素
             if (videoElement.getContext) {
               const ctx = videoElement.getContext('2d');
-              const videoBlob = new Blob([data.frame], { type: 'image/jpeg' });
+              const videoBlob = new Blob([data.frame], {type: 'image/jpeg'});
               const img = new Image();
 
               // 确保每次加载完成后释放 URL 对象，避免内存泄漏
@@ -172,7 +172,7 @@ export default {
           });
         } else {
           console.warn(`Canvas for user ${data.user_id} not found.`);
-          this.videos.push({ user_id: data.user_id });
+          this.videos.push({user_id: data.user_id});
         }
       });
 

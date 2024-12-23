@@ -427,36 +427,21 @@ class ConferenceClient:
         max_udp_size = 65000
         print("run function of send screen")
         print("run function of send camera")
-        with mss.mss() as sct:
-            while self.on_meeting:
-                if self.acting_data_types['camera']:
-                    if self.cap is None:
-                        repeat = 0
-                        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
-                        self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
-                    ret, frame = self.cap.read()
-                    try:
-                        if ret:
-                            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
-                            img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
-                            data_encode = np.array(img_encode)
-                            image_data = data_encode.tobytes()
-                            # 个人显示
-                            api.recv_camera(self.user_name, image_data)
 
-                            message = b''
-                            user_bytes = self.user_name.encode('utf-8')
-                            message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
-                            camera_socket.sendto(message, (target_address, port_camera))
-                    except ConnectionAbortedError as e:
-                        print(f"[Error]: Connection aborted: {e}")
-                else:
-                    if repeat <= 3:
-                        black_frame = np.zeros((camera_height, camera_width, 3), dtype=np.uint8)
-                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
-                        img_encode = cv2.imencode('.jpg', black_frame, encode_param)[1]
-                        image_data = img_encode.tobytes()
+        while self.on_meeting:
+            if self.acting_data_types['camera']:
+                if self.cap is None:
+                    repeat = 0
+                    self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 设置缓冲区大小为 1 帧
+                    self.cap.set(cv2.CAP_PROP_FPS, 10)  # 设置较低的帧率
+                ret, frame = self.cap.read()
+                try:
+                    if ret:
+                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
+                        img_encode = cv2.imencode('.jpg', frame, encode_param)[1]
+                        data_encode = np.array(img_encode)
+                        image_data = data_encode.tobytes()
                         # 个人显示
                         api.recv_camera(self.user_name, image_data)
 
@@ -464,96 +449,112 @@ class ConferenceClient:
                         user_bytes = self.user_name.encode('utf-8')
                         message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
                         camera_socket.sendto(message, (target_address, port_camera))
-                        repeat = repeat + 1
-                    if self.cap is not None:
-                        self.cap.release()
-                        self.cap = None
+                except ConnectionAbortedError as e:
+                    print(f"[Error]: Connection aborted: {e}")
+            else:
+                if repeat <= 3:
+                    black_frame = np.zeros((camera_height, camera_width, 3), dtype=np.uint8)
+                    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
+                    img_encode = cv2.imencode('.jpg', black_frame, encode_param)[1]
+                    image_data = img_encode.tobytes()
+                    # 个人显示
+                    api.recv_camera(self.user_name, image_data)
 
-                if self.acting_data_types['screen']:
-                    # 捕获屏幕
-                    # screenshot = sct.shot(output='screenshot.png', mon=-1)  # mon=-1 获取主屏
-                    # img = cv2.imread(screenshot)  # 读取图片为 OpenCV 图像格式
-                    #
-                    # # 设置 JPEG 压缩质量为更高的质量，减少损失
-                    # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40] # 40 是较低质量，如果需要更高质量可以调整
-                    # img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
-                    # compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
-                    #
-                    # api.recv_screen(compressed_image_data)
-                    #
-                    # # 发送屏幕图像数据
-                    # if frame_counter >= 65530:
-                    #     frame_counter = 0
-                    #
-                    # # 分块发送大数据包
-                    # if len(compressed_image_data) > max_udp_size:
-                    #     for i in range(0, len(compressed_image_data), max_udp_size):
-                    #         chunk = compressed_image_data[i:i + max_udp_size]
-                    #         identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
-                    #         chunk_with_identifier = identifier + chunk
-                    #         socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                    #     frame_counter += 1
-                    # else:
-                    #     # 直接发送小数据包
-                    #     identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
-                    #     chunk_with_identifier = identifier + compressed_image_data
-                    #     socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                    #     frame_counter += 1
-                    # time.sleep(0.033)  # 控制帧率（30fps）
-                    img = pyautogui.screenshot()  # 获取屏幕截图
-                    img = np.array(img)  # 转换为 NumPy 数组
+                    message = b''
+                    user_bytes = self.user_name.encode('utf-8')
+                    message += user_bytes + b'\0' * (8 - len(user_bytes)) + image_data
+                    camera_socket.sendto(message, (target_address, port_camera))
+                    repeat = repeat + 1
+                if self.cap is not None:
+                    self.cap.release()
+                    self.cap = None
+
+            if self.acting_data_types['screen']:
+                # 捕获屏幕
+                # screenshot = sct.shot(output='screenshot.png', mon=-1)  # mon=-1 获取主屏
+                # img = cv2.imread(screenshot)  # 读取图片为 OpenCV 图像格式
+                #
+                # # 设置 JPEG 压缩质量为更高的质量，减少损失
+                # encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40] # 40 是较低质量，如果需要更高质量可以调整
+                # img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                # compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
+                #
+                # api.recv_screen(compressed_image_data)
+                #
+                # # 发送屏幕图像数据
+                # if frame_counter >= 65530:
+                #     frame_counter = 0
+                #
+                # # 分块发送大数据包
+                # if len(compressed_image_data) > max_udp_size:
+                #     for i in range(0, len(compressed_image_data), max_udp_size):
+                #         chunk = compressed_image_data[i:i + max_udp_size]
+                #         identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                #         chunk_with_identifier = identifier + chunk
+                #         socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                #     frame_counter += 1
+                # else:
+                #     # 直接发送小数据包
+                #     identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                #     chunk_with_identifier = identifier + compressed_image_data
+                #     socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                #     frame_counter += 1
+                # time.sleep(0.033)  # 控制帧率（30fps）
+                img = pyautogui.screenshot()  # 获取屏幕截图
+                img = np.array(img)  # 转换为 NumPy 数组
+                # 设置 JPEG 压缩质量
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+                img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                # data_encode_s = np.array(img_encoded)
+                compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
+                api.recv_screen(compressed_image_data)
+                if frame_counter >= 65530:
+                    frame_counter = 0
+                # 计算分块大小，保持每个块的大小适合 UDP 传输
+                if len(compressed_image_data) > max_udp_size:
+                    # print(f"Data size {len(compressed_image_data)} exceeds max UDP size, splitting...")
+                    for i in range(0, len(compressed_image_data), max_udp_size):
+                        chunk = compressed_image_data[i:i + max_udp_size]
+                        # 生成16位标识符（frame_counter）并打包为2字节
+                        identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                        # 拼接标识符和数据块
+                        chunk_with_identifier = identifier + chunk
+                        # 发送数据块
+                        socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                    # 增加帧计数器
+                    frame_counter += 1
+                else:
+                    # 对于小于最大 UDP 大小的数据，直接发送
+                    identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
+                    chunk_with_identifier = identifier + compressed_image_data
+                    socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
+                    # 增加帧计数器
+                    frame_counter += 1
+            else:
+                if repeat_sc < 3:
+                    # 如果为False，发送全黑色图像
+                    height, width = 1080, 1920  # 假设屏幕大小为 1920x1080
+                    black_image = np.zeros((height, width, 3), dtype=np.uint8)  # 创建一个全黑图像
                     # 设置 JPEG 压缩质量
                     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
-                    img_encoded = cv2.imencode('.jpg', img, encode_param)[1]
+                    img_encoded = cv2.imencode('.jpg', black_image, encode_param)[1]
                     compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
-                    api.recv_screen(compressed_image_data)
+                    # 发送全黑图像
                     if frame_counter >= 65530:
                         frame_counter = 0
-                    # 计算分块大小，保持每个块的大小适合 UDP 传输
                     if len(compressed_image_data) > max_udp_size:
-                        # print(f"Data size {len(compressed_image_data)} exceeds max UDP size, splitting...")
                         for i in range(0, len(compressed_image_data), max_udp_size):
                             chunk = compressed_image_data[i:i + max_udp_size]
-                            # 生成16位标识符（frame_counter）并打包为2字节
                             identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
-                            # 拼接标识符和数据块
                             chunk_with_identifier = identifier + chunk
-                            # 发送数据块
                             socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                        # 增加帧计数器
                         frame_counter += 1
                     else:
-                        # 对于小于最大 UDP 大小的数据，直接发送
                         identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
                         chunk_with_identifier = identifier + compressed_image_data
                         socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                        # 增加帧计数器
                         frame_counter += 1
-                else:
-                    if repeat_sc < 3:
-                        # 如果为False，发送全黑色图像
-                        height, width = 1080, 1920  # 假设屏幕大小为 1920x1080
-                        black_image = np.zeros((height, width, 3), dtype=np.uint8)  # 创建一个全黑图像
-                        # 设置 JPEG 压缩质量
-                        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
-                        img_encoded = cv2.imencode('.jpg', black_image, encode_param)[1]
-                        compressed_image_data = img_encoded.tobytes()  # 获取压缩后的字节数据
-                        # 发送全黑图像
-                        if frame_counter >= 65530:
-                            frame_counter = 0
-                        if len(compressed_image_data) > max_udp_size:
-                            for i in range(0, len(compressed_image_data), max_udp_size):
-                                chunk = compressed_image_data[i:i + max_udp_size]
-                                identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
-                                chunk_with_identifier = identifier + chunk
-                                socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                            frame_counter += 1
-                        else:
-                            identifier = (frame_counter & 0xFFFF).to_bytes(2, byteorder='big')
-                            chunk_with_identifier = identifier + compressed_image_data
-                            socket_screen.sendto(chunk_with_identifier, (target_address, port_screen))
-                            frame_counter += 1
-                        repeat_sc = repeat_sc + 1
+                    repeat_sc = repeat_sc + 1
 
 
     def receive_text(self, decompress=None):

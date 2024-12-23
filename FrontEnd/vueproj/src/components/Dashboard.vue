@@ -226,10 +226,23 @@ export default {
 
     async showMeetingList() {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/api/check-list');
+        const response = await axios.post('http://127.0.0.1:5000/api/check_list');
+        console.log(response.data);
         if (response.data.status === 'success') {
-          this.meetingList = response.data.meetings;
           this.isMeetingListVisible = true;
+          if (response.data.message === "None") {
+            message.info("当前没有会议");
+          } else {
+            const meetings = response.data.message.trim().split(' ');
+            this.meetingList = [];
+            for (let i = 0; i < meetings.length; i += 3) {
+              this.meetingList.push({
+                title: meetings[i],
+                creator: meetings[i + 1],
+                id: meetings[i + 2]
+              });
+            }
+          }
         } else {
           message.error("获取会议列表失败：" + response.data.message);
         }
