@@ -1,3 +1,5 @@
+import time
+
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, send
 import asyncio
@@ -7,7 +9,7 @@ from log_register_func import *
 from flask_cors import CORS
 from flask_socketio import emit
 import datetime
-
+import threading
 app = Flask(__name__)
 # app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -29,6 +31,11 @@ join_info = {
 
 # 具体功能之后完善
 
+def keep_prog():
+    print("keep running")
+    time.sleep(60)
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     client_instance = app.config.get('CLIENT_INSTANCE')
@@ -42,6 +49,11 @@ def login():
     print("use_input:", use_input)
     recv = server_message_encrypt(use_input, client_instance)
     if "Login successfully" in recv:
+
+        recv_change_info = threading.Thread(target=keep_prog)
+        recv_change_info.daemon = True  # 设置为守护线程，程序退出时自动关闭
+        recv_change_info.start()
+
         login_info["status"] = True
         client_instance.user_name = username
         # client_instance.camera_queues[username] = queue.Queue()
@@ -82,11 +94,11 @@ def Create():
     title = data.get('title')
     title = title + " " + client_instance.user_name
     ans, con_id = client_instance.create_conference(title, client_instance.conference_type)
-    error = 0
-    if "Error" in ans:
-        error = 1
-    print("pass")
-    if error == 0:
+    # error = 0
+    # if "Error" in ans:
+    #     error = 1
+    # print("pass")
+    if "Success" in ans:
         print(jsonify({'status': 'success', 'message': con_id}))
         return jsonify({'status': 'success', 'message': con_id})
     else:
@@ -147,25 +159,27 @@ def Check_list():
 
 
 @app.route('/api/quit', methods=['POST'])
-async def Quit():
+def Quit():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     # global quit
     # quit = True
-    await client_instance.quit_conference()
+    client_instance.quit_conference()
     # if username in users and users[username] == password:
     return jsonify({'status': 'success', 'message': 'Click quit return'})
 
 
 @app.route('/api/cancel', methods=['POST'])
-async def Cancel():
+def Cancel():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """Handle POST request for user login"""
     # global cancel
     # cancel = True
-    if client_instance.host:
-        await client_instance.cancel_conference()
-        # if username in users and users[username] == password:
+    # if client_instance.host:
+    client_instance.cancel_conference()
+    # if username in users and users[username] == password:
+    time.sleep(1)
+    if client_instance.allow_quit:
         return jsonify({'status': 'success', 'message': 'Click cancel return'})
     else:
         return jsonify({'status': 'fail', 'message': 'Click cancel return'})
@@ -191,11 +205,12 @@ def update_camera_status():
 def update_screen_status():
     client_instance = app.config.get('CLIENT_INSTANCE')
     """前端通过 POST 请求更新 camera 状态"""
-    response = client_instance.share_switch('screen')
-    if "SUCCESS" in response:
-        return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
-    else:
-        return jsonify({'status': 'fail', 'camera_status': response})
+    client_instance.share_switch('screen')
+    return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
+    # if "SUCCESS" in response:
+    #     return jsonify({'status': 'success', 'camera_status': client_instance.acting_data_types['screen']})
+    # else:
+    #     return jsonify({'status': 'fail', 'camera_status': response})
 
 
 @socketio.on('message')

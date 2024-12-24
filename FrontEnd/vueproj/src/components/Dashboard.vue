@@ -1,8 +1,7 @@
 <template>
   <div class="dashboard">
-    <!-- 用户信息 -->
     <div class="user-info">
-      <h2>欢迎回来, {{ user_id }}!</h2>
+      <h2>欢迎使用妮可大会议平台嗷!</h2>
       <p>今天是 {{ currentDate }}</p>
     </div>
 
@@ -15,15 +14,15 @@
         </a-card>
       </a-col>
       <a-col span="8">
-        <a-card title="加入多人会议" class="hover-card">
-          <p>通过会议号加入多人会议。</p>
-          <a-button type="primary" block @click="showJoinMeeting" class="hover-button">加入多人会议</a-button>
+        <a-card title="加入会议" class="hover-card">
+          <p>通过会议号加入会议。</p>
+          <a-button type="primary" block @click="showJoinMeeting" class="hover-button">加入会议</a-button>
         </a-card>
       </a-col>
       <a-col span="8">
-        <a-card title="加入简单会议" class="hover-card">
-          <p>通过会议列表加入简单会议。</p>
-          <a-button type="primary" block @click="showJoinSimpleMeeting" class="hover-button">加入简单会议</a-button>
+        <a-card title="查看会议列表" class="hover-card">
+          <p>查看当前可以加入的会议。</p>
+          <a-button type="primary" block @click="showMeetingList" class="hover-button">查看会议列表</a-button>
         </a-card>
       </a-col>
     </a-row>
@@ -70,10 +69,10 @@
       </a-form>
     </a-modal>
 
-    <!-- 加入多人会议模态框 -->
+    <!-- 加入会议模态框 -->
     <a-modal
         v-model:visible="isJoinMeetingVisible"
-        title="加入多人会议"
+        title="加入会议"
         :footer="null"
         centered
         @cancel="resetJoinForm"
@@ -99,26 +98,14 @@
         </a-form-item>
       </a-form>
     </a-modal>
-
-    <!-- 加入简单会议模态框 -->
     <a-modal
-        v-model:visible="isJoinSimpleMeetingVisible"
-        title="加入简单会议"
-        :footer="null"
-        centered
-        @cancel="resetJoinForm"
-        ok-text="加入"
-        cancel-text="取消"
+      v-model:visible="isMeetingListVisible"
+      title="会议列表"
+      :footer="null"
+      centered
+      @cancel="isMeetingListVisible = false"
     >
-      <a-list
-          bordered
-          dataSource="simpleMeetings"
-          renderItem="item => (
-          <a-list-item @click='joinSimpleMeeting(item.id)'>
-            {item.title}
-          </a-list-item>
-        )"
-      />
+      <a-table :data-source="meetingList" :columns="columns" row-key="id" />
     </a-modal>
 
   </div>
@@ -139,16 +126,35 @@ export default {
       isCreateMeetingVisible: false,
       isJoinMeetingVisible: false,
       isJoinSimpleMeetingVisible: false,
+      isMeetingListVisible: false,
       joinMeetingId: "",
       simpleMeetings: [],
       meeting: {
         title: "",
         type: "",
       },
+      meetingList: [],
       user_id: this.getUsername,
       currentDate: new Date().toLocaleDateString(),
+      columns: [
+        {
+          title: '会议名称',
+          dataIndex: 'title',
+          key: 'title',
+        },
+        {
+          title: '发起者',
+          dataIndex: 'creator',
+          key: 'creator',
+        },
+        {
+          title: '会议号',
+          dataIndex: 'id',
+          key: 'id',
+        },
+      ],
     };
-  },
+},
   methods: {
     hoverEnter(event) {
       const card = event.currentTarget;
@@ -170,12 +176,14 @@ export default {
 
       if (this.meeting.type === 'simple') {
         try {
-          const response = await axios.post('http://127.0.0.1:5000/api/create-P2P', {
+          const response = await axios.post('http://127.0.0.1:5000/api/create_P2P', {
             title: this.meeting.title,
           });
           if (response.data.status === 'success') {
             message.success("简单会议创建成功！");
             this.resetForm();
+            this.joinMeetingId = response.data.message;
+            await this.joinMeeting();
           } else {
             message.error("简单会议创建失败：" + response.data.message);
           }
@@ -215,48 +223,44 @@ export default {
     showJoinMeeting() {
       this.isJoinMeetingVisible = true;
     },
-    async showJoinSimpleMeeting() {
-      // try {
-      //   const response = await axios.get('http://127.0.0.1:5000/api/simple-meetings');
-      //   this.simpleMeetings = response.data.meetings;
-      //   this.isJoinSimpleMeetingVisible = true;
-      // } catch (error) {
-      //   message.error("获取简单会议列表失败：" + error.message);
-      // }
+
+    async showMeetingList() {
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/check_list');
+        console.log(response.data);
+        if (response.data.status === 'success') {
+          this.isMeetingListVisible = true;
+          if (response.data.message === "None") {
+            message.info("当前没有会议");
+          } else {
+            const meetings = response.data.message.trim().split(' ');
+            this.meetingList = [];
+            for (let i = 0; i < meetings.length; i += 3) {
+              this.meetingList.push({
+                title: meetings[i],
+                creator: meetings[i + 1],
+                id: meetings[i + 2]
+              });
+            }
+          }
+        } else {
+          message.error("获取会议列表失败：" + response.data.message);
+        }
+      } catch (error) {
+        message.error("获取会议列表失败：" + error.message);
+      }
     },
-    // async joinMeeting() {
-    //   if (!this.joinMeetingId) {
-    //     return message.error("请输入会议号！");
-    //   }
-    //   const response = await axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
-    //   console.log(response)
-    //   if (response.data.status === 'success') {
-    //     message.success("加入会议成功");
-    //     this.$router.push('/meeting');
-    //   } else {
-    //     message.error("加入会议失败：" + response.data.message);
-    //   }
-    // },
-    joinMeeting() {
+
+    async joinMeeting() {
       if (!this.joinMeetingId) {
         return message.error("请输入会议号！");
       }
-      axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
-      message.success("加入会议成功");
-      this.$router.push('/meeting');
-    },
-    joinSimpleMeeting(meetingId) {
-      try {
-        axios.post('http://127.0.0.1:5000/api/join-simple', {
-          con_id: meetingId,
-        });
-        this.resetJoinForm();
-        setTimeout(() => {
-          message.success("加入简单会议成功！");
-          this.$router.push('/meeting');
-        }, 1000);
-      } catch (error) {
-        message.error("加入简单会议失败：" + error.message);
+      const response = await axios.post('http://127.0.0.1:5000/api/join', {con_id: this.joinMeetingId});
+      if (response.data.status === 'success') {
+        message.success("加入会议成功");
+        this.$router.push('/meeting');
+      } else {
+        message.error("加入会议失败：" + response.data.message);
       }
     },
     resetJoinForm() {
