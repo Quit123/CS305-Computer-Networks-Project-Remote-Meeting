@@ -1,4 +1,6 @@
 import asyncio
+import time
+
 from util import *
 import string
 from asyncio import StreamReader, StreamWriter
@@ -21,6 +23,8 @@ class ConferenceServer:
         self.tasks = []
         self.owner = None
         self.screen = False
+        self.loops = {}
+        self.sockets = {}
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter, message):
         message = message
@@ -34,25 +38,39 @@ class ConferenceServer:
                     self.conns.append(address)
                     print(f"SUCCESS join confernece {self.title}")
                     writer.write(f"SUCCESS join confernece {self.title} {self.data_serve_ports[0]}".encode())
-                    await writer.drain()
                 else:
+                    print(self.conns)
                     writer.write("FAILURE already join".encode())
-                    await writer.drain()
+                await writer.drain()
             elif parts[1] == "QUIT":
-                # print(message+"QQQQQQQQQQQQQQQQQQQQQQQQQQ")
+                print(message+"QQQQQQQQQQQQQQQQQQQQQQQQQQ")
                 if address in self.conns:
                     self.conns.remove(address)
-                    # print(address+"66666666666666666666666666666666666666")
+                    print(address+"66666666666666666666666666666666666666")
                     writer.write(f"QUIT".encode())
-                    await writer.drain()
+                    time.sleep(0.5)
+                    for i in range(3):
+                        await self.loops[1].sock_sendto(self.sockets[1], "QUIT".encode(), (address, self.data_serve_ports[0]))
+                        await self.loops[2].sock_sendto(self.sockets[2], "QUIT".encode(), (address, self.data_serve_ports[2]))
+                        await self.loops[3].sock_sendto(self.sockets[3], "QUIT".encode(), (address, self.data_serve_ports[3]))
+                        await self.loops[4].sock_sendto(self.sockets[4], "QUIT".encode(), (address, self.data_serve_ports[1]))
                     # 会议创始人点击发QUIT
                 else:
                     writer.write("FAILURE user not in meeting".encode())
-                    await writer.drain()
-            elif (parts[1] == "CANCEL"):
+                print(self.conns)
+                await writer.drain()
+            elif parts[1] == "CANCEL":
+                print("0000000000000000000000000000000000000")
+                #writer.write("SUCCESS QUIT confernece".encode())
+                time.sleep(0.5)
+                for conn in self.conns:
+                    for i in range(3):
+                        await self.loops[1].sock_sendto(self.sockets[1], "QUIT".encode(), (conn, self.data_serve_ports[0]))
+                        await self.loops[2].sock_sendto(self.sockets[2], "QUIT".encode(), (conn, self.data_serve_ports[2]))
+                        await self.loops[3].sock_sendto(self.sockets[3], "QUIT".encode(), (conn, self.data_serve_ports[3]))
+                        await self.loops[4].sock_sendto(self.sockets[4], "QUIT".encode(), (conn, self.data_serve_ports[1]))
                 self.run = False
                 self.conns = []
-                writer.write("SUCCESS QUIT confernece".encode())
                 await writer.drain()
             elif (parts[1] == "OPEN"):
                 if (self.screen):
@@ -100,12 +118,11 @@ class ConferenceServer:
         udp_server_socket.setblocking(False)
 
         print("UDP server1 is running...")
+        self.loops[1] = loop
+        self.sockets[1] = udp_server_socket
         conns = self.conns
         while self.run:
             data, client_address = await loop.sock_recvfrom(udp_server_socket, buffer_size)
-            if (client_address[0] not in conns):
-                print(client_address)
-                conns.append(client_address[0])
             # print(data.decode())
             for w in conns:
                 if w != client_address[0]:
@@ -121,11 +138,11 @@ class ConferenceServer:
         udp_server_socket.setblocking(False)
 
         print("UDP server2 is running...")
+        self.loops[2] = loop
+        self.sockets[2] = udp_server_socket
         conns = self.conns
         while self.run:
             data, client_address = await loop.sock_recvfrom(udp_server_socket, buffer_size)
-            if (client_address[0] not in conns):
-                conns.append(client_address[0])
             for w in conns:
                 if w != client_address[0]:
                     await loop.sock_sendto(udp_server_socket, data, (w, self.data_serve_ports[2]))
@@ -140,11 +157,11 @@ class ConferenceServer:
         udp_server_socket.setblocking(False)
 
         print("UDP server3 is running...")
+        self.loops[3] = loop
+        self.sockets[3] = udp_server_socket
         conns = self.conns
         while self.run:
             data, client_address = await loop.sock_recvfrom(udp_server_socket, buffer_size)
-            if (client_address[0] not in conns):
-                conns.append(client_address[0])
             print(data.decode())
             print(conns)
             for w in conns:
@@ -161,12 +178,14 @@ class ConferenceServer:
         udp_server_socket.setblocking(False)
 
         print("UDP server4 is running...")
+        self.loops[4] = loop
+        self.sockets[4] = udp_server_socket
         conns = self.conns
         while self.run:
             data, client_address = await loop.sock_recvfrom(udp_server_socket, buffer_size)
-            if (client_address[0] not in conns):
-                print(client_address)
-                conns.append(client_address[0])
+            # if (client_address[0] not in conns):
+            #     print(client_address)
+            #     conns.append(client_address[0])
             for w in conns:
                 await loop.sock_sendto(udp_server_socket, data, (w, self.data_serve_ports[1]))
 
@@ -205,7 +224,8 @@ class MainServer:
         self.conf_name = {}  # P2P模式下管理（会议号:会议名）
         self.P2P_conference = {}  # P2P模式管理会议号和(主持人IP,writer)
         self.P2P_limit = {}  # P2P会议人数不超过2
-        self.ports = 8001
+        self.P2P_screen = {}  # P2P的screen开关情况
+        self.ports = 8005
 
     async def handle_creat_conference(self, writer, reader, title, user_name, type):
         """
@@ -223,6 +243,7 @@ class MainServer:
             self.P2P_conference[conference_id] = (client_address[0], writer)
             self.conf_name[conference_id] = title
             self.P2P_limit[conference_id] = 0
+            self.P2P_screen[conference_id] = 0
         else:
             print("create Conference")
             new_conference = ConferenceServer(conference_id, title, self.ports)  # 创建新会议服务器
@@ -237,7 +258,7 @@ class MainServer:
             writer.write(f'SUCCESS {conference_id} {self.ports}'.encode())
             print(self.ports)
             if self.ports == 8993:
-                self.ports = 8000
+                self.ports = 8005
             else:
                 self.ports = self.ports + 4
             await writer.drain()
@@ -254,6 +275,7 @@ class MainServer:
                 await writer.drain()
             else:
                 conference = self.conference_servers[conference_id]
+                print("5555555555555555555555555555555555")
                 await conference.handle_client(reader, writer, message)  # 将message交给会议服务器，由会议服务器添加？
                 self.clients_info[(writer, reader)] = conference_id  # 标识每个客户端加入的会议
         elif conference_id in self.P2P_conference:  # 如果是P2P会议的id
@@ -288,7 +310,7 @@ class MainServer:
         """
         if (writer, reader) in self.clients_info:  # 如果该用户加入了某个会议
             cid = self.clients_info[(writer, reader)]
-            if cid in self.P2P_conference:
+            if cid in self.P2P_conference:  # 如果是P2P
                 print("quit P2P conference")
                 # client_address = writer.get_extra_info('peername')
                 # if client_address[0] == self.P2P_conference[cid][0]:
@@ -298,6 +320,7 @@ class MainServer:
                 #     writer.write(f'SUCCESS: Cancel Conference: {cid}'.encode())
                 #     await writer.drain()
                 # else:
+                self.P2P_screen.pop(cid)
                 self.P2P_conference.pop(cid)
                 self.P2P_limit.pop(cid)
                 ktd = [k for k, v in self.user_name_conference.items() if v == cid]
@@ -313,12 +336,12 @@ class MainServer:
                 cid = self.clients_info[(writer, reader)]  # 用户加入的会议id
                 print(cid)
                 await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
-                # 此时会议服务器已经更换主持人
+                print("quit conference server")
                 flag = 0
-                if writer == self.conference_manager[cid]:
-                    self.clients_info.pop((writer, reader))
-                    self.reverse_conference_manager.pop(writer)
-                    # print("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+                self.clients_info.pop((writer, reader))
+                if writer == self.conference_manager[cid]:  # 如果是主持人退出
+                    print("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+                    self.reverse_conference_manager.pop(writer)  # 删除主持人！！！
                     for k, v in self.clients_info.items():
                         if v == cid:
                             # print("change")
@@ -335,13 +358,9 @@ class MainServer:
                         self.conference_servers.pop(cid)
                         task = self.manage_task.pop(cid)  # Get the task associated with the conference
                         task.cancel()  # Cancel the task
-                else:
-                    await self.conference_servers[cid].handle_client(reader, writer, message)  # 向该会议发送message
-                    self.clients_info.pop((writer, reader))  # 该用户状态改为未加入任何会议
-                    writer.write(f'SUCCESS: Quit Conference: {cid}'.encode())
-                    client_address = writer.get_extra_info('peername')
-                    print(f"{client_address[0]} quit conference {cid}")
-                    await writer.drain()
+                        owner_name = [k for k, v in self.user_name_conference.items() if v == cid]
+                        for k in owner_name:
+                            self.user_name_conference.pop(k)
         else:
             writer.write('FAIL: You do not have a meeting now'.encode())
             await writer.drain()
@@ -352,17 +371,23 @@ class MainServer:
         cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
         """
         if writer in self.conference_manager.values():  # 如果该用户是会议主持人
+            print("555555555555555555555555555555555555555")
             conference_id = self.reverse_conference_manager[writer]  # 从反向映射表中找会议号
+            await self.conference_servers[conference_id].handle_client(reader, writer, message)
             task = self.manage_task.pop(conference_id)  # Get the task associated with the conference
             task.cancel()  # Cancel the task
             self.conference_manager.pop(conference_id)  # 删除（主持人，会议）记录
             self.reverse_conference_manager.pop(writer)
             keys_to_delete = [k for k, v in self.clients_info.items() if v == conference_id]
             for k in keys_to_delete:
-                self.clients_info.pop(k)
                 w, r = k
                 w.write(f'QUIT'.encode())
+                self.clients_info.pop(k)
             self.conference_servers.pop(conference_id)  # 删除该会议
+            print("555555555555555555555555555555555555555")
+            owner_name = [k for k, v in self.user_name_conference.items() if v == conference_id]
+            for k in owner_name:
+                self.user_name_conference.pop(k)
             client_address = writer.get_extra_info('peername')
             print(f'{client_address[0]} cancel conference: {conference_id}')
             await writer.drain()
@@ -422,7 +447,21 @@ class MainServer:
                                 await self.handle_cancel_conference(reader, writer, message)
                         elif "SCREEN" in message:
                             cid = self.clients_info[(writer, reader)]
-                            await self.conference_servers[cid].handle_client(reader, writer, message)
+                            print(message+"5555555555555555555555555")
+                            if cid in self.P2P_conference:
+                                if "OPEN" in message:
+                                    if self.P2P_screen[cid] == 1:
+                                        writer.write("FAIL SCREEN already share".encode())
+                                        await writer.drain()
+                                    else:
+                                        writer.write("SUCCESS SCREEN open screen".encode())
+                                        self.P2P_screen[cid] = 1
+                                        await writer.drain()
+                                elif "CLOSE" in message:
+                                    self.P2P_screen[cid] = 0
+                            else:
+                                print("5555555555555444444444444444444444444")
+                                await self.conference_servers[cid].handle_client(reader, writer, message)
                     else:
                         cmd = message.split(' ')
                         if cmd[0] == 'login':
