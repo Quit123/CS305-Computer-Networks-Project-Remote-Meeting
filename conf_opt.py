@@ -42,9 +42,9 @@ def establish_connect(self):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 sock.bind(('0.0.0.0', port))
                 self.sockets[type] = sock
-        print(f"[Info]: Connected to '{self.server_addr[0]}' server.")
+        print(f"[Info]: sockets ini successfully")
     except Exception as e:
-        print(f"[Error]: Could not connect to '{self.server_addr[0]}' server: {e}")
+        print("error in establish_connect: ", e)
 
 
 def close_connection(self):

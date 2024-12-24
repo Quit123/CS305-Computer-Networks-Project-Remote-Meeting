@@ -100,19 +100,7 @@ export default {
       }
     },
     async cancelMeeting() {
-      try {
         const response = await axios.post('http://127.0.0.1:5000/api/cancel');
-        if (response.data.status === 'success') {
-          console.log('取消成功:', response.data);
-          this.$router.push('/dashboard');
-        } else {
-          console.error('取消失败:', response.data);
-          alert('取消失败，妮可不让你取消哦');
-        }
-      } catch (error) {
-        console.error('取消失败:', error);
-        alert('取消失败，妮可不让你取消哦');
-      }
     },
     connectToSocket() {
       this.socket = io('http://127.0.0.1:5000');
@@ -123,12 +111,12 @@ export default {
 
       this.socket.on('host_info', (data) => {
         console.log('Host info:', data);
-        data.message.success("主机信息：" + data);
+        alert("主机信息：" + data.message);
       });
 
       this.socket.on('quit_info', (data) => {
         console.log('Quit info:', data);
-        data.message.success("退出信息：" + data);
+        alert("退出信息：" + data.message);
         this.$router.push('/dashboard');
       });
 

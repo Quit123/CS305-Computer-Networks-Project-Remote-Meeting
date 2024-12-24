@@ -210,7 +210,6 @@ export default {
         }
       }
       else {
-        message.error("请选择会议类型！");
       }
     },
     resetForm() {
