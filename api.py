@@ -2,16 +2,12 @@ import time
 
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, send
-import asyncio
 import util
-import queue
 from log_register_func import *
 from flask_cors import CORS
-from flask_socketio import emit
 import datetime
 import threading
 app = Flask(__name__)
-# app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
 
